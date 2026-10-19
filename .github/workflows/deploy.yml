@@ -1,0 +1,40 @@
+on: push
+name: Deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # MAG agresivno kesira portal: ?v=<commit> na svim .js/.css u index.html.
+      - name: Cache-busting
+        run: |
+          V=$(git rev-parse --short HEAD)
+          sed -i -E "s#(src|href)=\"((js|css|mag)/[^\"?]+\.(js|css))\"#\1=\"\2?v=$V\"#g" index.html
+          grep -o '?v=[a-z0-9]*' index.html | head -1
+
+      - name: Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_HOSTNAME }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWD }}
+
+          protocol: ftp
+          port: 21
+          timeout: 60000
+          log-level: verbose
+
+          local-dir: ./
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            tools/**
+            dist/**
+            mag/build.sh
+            **/*.md
+            **/node_modules/**
