@@ -13,7 +13,6 @@
 
         panel: function () { return App.Platform.panelUrl; },
 
-        /** {mac_registered, urls[], expire_date, is_trial, languages[]} */
         /**
          * Dodatni parametri prijave uredaja (samo platforme koje ih imaju, npr. MAG: serijski broj + token),
          * da sama MAC adresa nije dovoljna za dohvat playliste.
@@ -23,14 +22,68 @@
             // panelUrl moze vec imati query (MAG PHP proxy: api/?r=...), onda ide '&'.
             return q ? (Api.panel().indexOf('?') >= 0 ? '&' : '?') + q : '';
         },
+
+        /**
+         * Tajni kljuc uredaja (API-SECURITY.md): 32 nasumicna bajta kao 64 hex znaka, nastaje jednom i
+         * ostaje na uredaju. MAC je javan; playliste server daje samo uz MAC + ovaj kljuc.
+         * Nikad se ne prikazuje i ne logira. Platforma moze imati svoju trajniju pohranu (deviceKeyStore).
+         */
+        deviceKey: function () {
+            if (Api._key) return Api._key;
+            var store = App.Platform.deviceKeyStore || {
+                load: function () { try { return window.localStorage.getItem('lbbe_device_key'); } catch (e) { return null; } },
+                save: function (v) { try { window.localStorage.setItem('lbbe_device_key', v); } catch (e) { } }
+            };
+            var k = String(store.load() || '').replace(/[^a-f0-9]/gi, '').toLowerCase();
+            if (k.length !== 64) {
+                k = randomHex(32);
+                store.save(k);
+            }
+            Api._key = k;
+            return k;
+        },
+        headers: function () {
+            return {
+                'X-Device-Key': Api.deviceKey(),
+                'X-App-Platform': App.Platform.name,
+                'X-App-Version': App.Platform.version
+            };
+        },
+        /**
+         * GET prema portalu s headerima uredaja. Ako zahtjev s headerima uopce ne prode (status 0:
+         * stari runtime / proxy bez CORS-a za custom headere), jednom bez njih — 403 se nikad ne zaobilazi.
+         */
+        portalGet: function (path, timeout) {
+            var url = Api.panel() + path + Api.authQuery();
+            if (Api.noHeaders) return U.getJSON(url, timeout);
+            return U.getJSON(url, timeout, Api.headers()).then(null, function (err) {
+                if (err && err.status === 0 && !err.timeout) {
+                    return U.getJSON(url, timeout).then(function (d) { Api.noHeaders = true; return d; });
+                }
+                throw err;
+            });
+        },
+        /** 401/403 {"error":"pairing_required","pairing_code":"482913"} -> {code} ili null. */
+        pairingFrom: function (err) {
+            if (!err || (err.status !== 401 && err.status !== 403)) return null;
+            var d = err.data;
+            if (d && d.error === 'pairing_required') return { code: d.pairing_code ? String(d.pairing_code) : '' };
+            return null;
+        },
+
+        /** {mac_registered, urls[], expire_date, is_trial, languages[]} */
         playlistInformation: function (mac) {
-            return U.getJSON(Api.panel() + '/playlist_information/' + encodeURIComponent(mac) + Api.authQuery(), 20000).then(function (data) {
+            return Api.portalGet('/playlist_information/' + encodeURIComponent(mac), 20000).then(function (data) {
                 if (!data || typeof data !== 'object') throw { status: 0, statusText: 'parse', parse: true };
                 return data;
             });
         },
         appSetting: function (mac) {
-            return U.getJSON(Api.panel() + '/get_app_setting/' + encodeURIComponent(mac) + Api.authQuery(), 15000);
+            return Api.portalGet('/get_app_setting/' + encodeURIComponent(mac), 15000);
+        },
+        /** Link za potvrdu uredaja (kod s portala, ne platformski pairCode). */
+        pairingUrl: function (mac, code) {
+            return Api.MYLIST_URL + '?mac=' + encodeURIComponent(mac || '').replace(/%3A/gi, ':') + (code ? '&code=' + encodeURIComponent(code) : '');
         },
         withMac: function (url, mac) {
             var out = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'mac=' + encodeURIComponent(mac || '').replace(/%3A/gi, ':');
@@ -43,6 +96,24 @@
             return App.Platform.pairCode ? App.Platform.pairCode() : '';
         }
     };
+
+    /** n nasumicnih bajtova kao hex (crypto ako postoji; inace Math.random pomijesan s vremenom). */
+    function randomHex(n) {
+        var hex = '0123456789abcdef', out = '', rnd = null;
+        try {
+            if (window.crypto && window.crypto.getRandomValues && typeof Uint8Array !== 'undefined') {
+                rnd = new Uint8Array(n);
+                window.crypto.getRandomValues(rnd);
+            }
+        } catch (e) { rnd = null; }
+        var t = new Date().getTime();
+        for (var i = 0; i < n; i++) {
+            var b = rnd ? rnd[i] : (Math.floor(Math.random() * 256) ^ ((t >> ((i % 4) * 8)) & 255) ^ Math.floor(Math.random() * 256)) & 255;
+            out += hex.charAt(b >> 4) + hex.charAt(b & 15);
+        }
+        return out;
+    }
+    App.randomHex = randomHex;
 
     /**
      * Xtream racun iz URL-a playliste. Prepoznaje get.php / player_api.php s username i password

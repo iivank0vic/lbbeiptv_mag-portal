@@ -109,6 +109,10 @@ Za MAG domenu na CF-u isključi Bot Fight Mode / Browser Integrity Check i Rocke
   za `flex: 1` elemente, centrirani logotipi) i crta ikone kao PNG iz `mag/icons/`
   (`python3 mag/make-icons.py . mag/icons` nakon promjene `js/icons.js`). Test u pregledniku: `?oldwk=1`.
   Za vjeran test bez boxa: PhantomJS 1.9.8 (WebKit 534, isto bez flexa/Promise/bind).
+- **Lite način i v3.1:** `App.Platform.lite` isključuje IndexedDB kopiju playliste ("Continue with saved data"
+  tada nije ponuđen). Ključ uređaja (`X-Device-Key`) se sprema u `SaveUserData` (prezivi brisanje localStoragea).
+  Slika na MAG-u ostaje `SetAspect` (Fit / Zoom / Auto / Stretch) — Fill / 16:9 / 4:3 su samo za HTML5.
+  Nove ikone (upozorenja, placeholderi, ±30 s) su u `mag/icons/` — `make-icons.py` nakon svake promjene `js/icons.js`.
 - **Viewport videa:** `SetViewport` je u **izlaznoj video rezoluciji** (`RDir('tvsystem')`: 1080i → 1920x1080,
   720p → 1280x720, PAL → 720x576), ne u pikselima grafike.
 

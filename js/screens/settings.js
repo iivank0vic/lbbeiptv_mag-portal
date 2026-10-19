@@ -17,11 +17,13 @@
                         { id: 'language', icon: 'language', title: t('change_language'), value: App.I18N.langName(currentLang()) },
                         { id: 'time', icon: 'clock', title: t('time_format'), value: St.get('time_format') === '12' ? t('format_12_hour') : t('format_24_hour') },
                         { id: 'network', icon: 'network', title: t('network_test'), value: t('ping') + ' · ' + t('download_speed') },
-                        { id: 'format', icon: 'format', title: t('stream_format'), value: St.get('stream_format') === 'm3u8' ? 'HLS (.m3u8)' : 'MPEG-TS (.ts)' }
+                        { id: 'format', icon: 'format', title: t('stream_format'), value: St.get('stream_format') === 'm3u8' ? 'HLS (.m3u8)' : 'MPEG-TS (.ts)' },
+                        { id: 'cache', icon: 'clearCache', title: t('setting_clear_cache', 'Clear cache'), value: t('clear_cache_short', 'Cache \u00b7 all data') }
                     ]
                 },
                 {
                     title: t('playback'), items: [
+                        { id: 'ratio', icon: 'ratio', title: t('screen_ratio'), value: App.Player.ratioLabel(App.Player.ratioMode()).replace(/^[^:]*:\s*/, '') },
                         { id: 'livesort', icon: 'sort', title: t('live_sort'), value: t(sortLbl[St.get('live_sort')] || 'string_default') }
                     ]
                 },
@@ -100,6 +102,8 @@
                     App.Player.create(v);
                     S.rerender();
                 });
+            } else if (id === 'ratio') {
+                App.Fullscreen.chooseRatio().then(function () { S.rerender(); });
             } else if (id === 'livesort') {
                 D.choose(t('select_live_sort'), [
                     { label: t('string_default'), value: 'default' }, { label: t('order_by_number'), value: 'number' },
@@ -119,6 +123,14 @@
                         });
                 };
                 go();
+            } else if (id === 'cache') {
+                D.options(t('setting_clear_cache', 'Clear cache'), [
+                    { value: 'cache', icon: 'clearCache', label: t('clear_cache_option_cache', 'Clear cache'), desc: t('clear_cache_option_cache_desc', 'Saved playlist copy and TV guide. Favourites and watch history stay.') },
+                    { value: 'all', icon: 'delete', danger: true, label: t('clear_cache_option_all', 'Clear all data'), desc: t('clear_cache_option_all_desc', 'Also favourites and watch history. The playlist is loaded again.') }
+                ]).then(function (v) {
+                    if (v === 'cache') App.clearCache(false).then(function () { App.toast(t('clear_cache_done_short', 'Cache cleared')); });
+                    else if (v === 'all') App.confirmClearAll();
+                });
             } else if (id === 'pin') {
                 D.changePin();
             } else if (id === 'network') {
@@ -150,22 +162,25 @@
                 },
                 onButton: function (act, dlg) {
                     if (act === 'close') { dlg.close(); return; }
-                    if (act === 'reload') { dlg.close(); App.Shell.stop(); App.boot(); return; }
-                    if (act === 'add') {
-                        dlg.close();
-                        App.Dialog.open({
-                            title: t('add_playlist'), width: 1100,
-                            body: '<div class="acc"><div class="acc-left" style="font-size:28px;line-height:1.45">' + U.esc(t('add_playlist_dialog_message')) +
-                                '<div class="acc-row"><div class="ib">' + App.icon('device') + '</div><div class="al">' + U.esc(t('mac_address')) +
-                                '<div class="av">' + U.esc(App.mac) + '</div></div></div></div>' +
-                                '<div class="acc-qr"><div class="qr-frame"><img src="' + U.qrDataUrl(qr) + '" alt="" /></div><div class="url">' +
-                                U.esc(qr.replace(/^https?:\/\//, '')) + '</div></div></div>',
-                            buttons: [{ label: t('close'), act: 'close' }, { label: t('reload_playlist'), act: 'reload', primary: true }],
-                            focusButton: 1,
-                            onButton: function (a, d2) { d2.close(); if (a === 'reload') { App.Shell.stop(); App.boot(); } }
-                        });
-                    }
+                    if (act === 'reload') { dlg.close(); App.boot(); return; }
+                    if (act === 'add') { dlg.close(); S.addPlaylist(); }
                 }
+            });
+        },
+
+        /** QR za dodavanje / ispravak playlista na webu (Playlists -> Add, More -> Manage playlists). */
+        addPlaylist: function () {
+            var qr = App.Api.withMac(App.Api.MYLIST_URL, App.mac);
+            App.Dialog.open({
+                title: t('add_playlist'), width: 1100,
+                body: '<div class="acc"><div class="acc-left" style="font-size:28px;line-height:1.45">' + U.esc(t('add_playlist_dialog_message')) +
+                    '<div class="acc-row"><div class="ib">' + App.icon('device') + '</div><div class="al">' + U.esc(t('mac_address')) +
+                    '<div class="av">' + U.esc(App.mac) + '</div></div></div></div>' +
+                    '<div class="acc-qr"><div class="qr-frame"><img src="' + U.qrDataUrl(qr) + '" alt="" /></div><div class="url">' +
+                    U.esc(qr.replace(/^https?:\/\//, '')) + '</div></div></div>',
+                buttons: [{ label: t('close'), act: 'close' }, { label: t('reload_playlist'), act: 'reload', primary: true }],
+                focusButton: 1,
+                onButton: function (a, d2) { d2.close(); if (a === 'reload') App.boot(); }
             });
         },
 
@@ -179,8 +194,13 @@
             else if (info.is_trial == 1) { state = t('account_state_trial'); pill = 'warn'; }
             else { state = t('account_state_active'); pill = 'ok'; }
             var pe = App.Lib.playlistExpiry();
-            var peText = pe === null ? '—' : (pe === 0 ? '∞ ' + t('unlimited') : U.fmtDate(pe));
-            var appExp = info.expire_date ? U.fmtDate(U.parseDate(info.expire_date) || new Date()) : '—';
+            var left = function (d) {
+                var n = Math.max(0, Math.ceil((d.getTime() - U.now()) / 86400000));
+                return U.fmtDate(d) + '  \u00b7  ' + t('days_left', '%1 days left').replace('%1', n);
+            };
+            var peText = pe === null ? '\u2014' : (pe === 0 ? '\u221e ' + t('unlimited') : left(pe));
+            var appD = info.expire_date ? U.parseDate(info.expire_date) : null;
+            var appExp = appD ? left(new Date(appD.getTime() + 86400000 - 1)) : '\u2014';
             var qrUrl = App.Api.withMac(info.is_trial == 1 || !info.mac_registered || expired ? App.Api.ACTIVATE_URL : App.Api.MYLIST_URL, App.mac);
             function row(icon, label, value) {
                 return '<div class="acc-row"><div class="ib">' + App.icon(icon) + '</div><div class="al">' + U.esc(label) + '<div class="av">' + U.esc(value) + '</div></div></div>';

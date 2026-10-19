@@ -15,14 +15,17 @@
         var wrap = document.createElement('div');
         var width = cfg.width || 1000;
         var opts = cfg.options || null;
-        var rows = opts ? Math.min(opts.length, cfg.visibleRows || 7) : 0;
+        // Opcije su kartice (Android OptionDialog): s opisom su vise.
+        var tall = !!(opts && opts.some(function (o) { return o.desc; }));
+        var rowH = tall ? 120 : 92;
+        var rows = opts ? Math.min(opts.length, cfg.visibleRows || (tall ? 5 : 7)) : 0;
         var html = '<div class="modal-back"></div><div class="dialog ' + (cfg.cls || '') + '" style="width:' + width + 'px;margin-left:' + (-width / 2) + 'px">';
         if (cfg.title) {
             html += '<div class="d-head"><div class="t-section">' + U.esc(cfg.title) + '</div>' +
                 (cfg.caption ? '<div class="t-caption">' + U.esc(cfg.caption) + '</div>' : '') + '</div>';
         }
         if (cfg.body) html += '<div class="d-body">' + cfg.body + '</div>';
-        if (opts) html += '<div class="d-list vlist" style="height:' + (rows * 84) + 'px"></div>';
+        if (opts) html += '<div class="d-list vlist" style="height:' + (rows * rowH - 12) + 'px"></div>';
         if (cfg.buttons && cfg.buttons.length) {
             html += '<div class="d-foot">';
             cfg.buttons.forEach(function (b) {
@@ -50,13 +53,16 @@
         if (opts) {
             var listEl = box.querySelector('.d-list');
             dlg.list = new W.VList({
-                el: listEl, name: 'list', rowH: 84, rowCls: 'opt' + (cfg.mode === 'check' ? ' check' : (cfg.mode === 'radio' ? ' radio' : '')),
+                el: listEl, name: 'list', rowH: rowH, rowCls: 'opt' + (tall ? ' tall' : '') + (cfg.mode === 'check' ? ' check' : (cfg.mode === 'radio' ? ' radio' : '')),
                 count: function () { return opts.length; },
-                cls: function (i) { return opts[i].on ? 'on' : ''; },
+                cls: function (i) { return (opts[i].on ? 'on' : '') + (opts[i].danger ? ' danger' : ''); },
                 inner: function (i) {
                     var o = opts[i];
-                    return (cfg.mode ? '<span class="mark"></span>' : '') + '<span class="ol">' + U.esc(o.label) + '</span>' +
-                        (o.sub ? '<span class="ov">' + U.esc(o.sub) + '</span>' : '');
+                    return (cfg.mode === 'check' ? '<span class="mark"></span>' : '') +
+                        (o.icon ? '<span class="oi">' + App.icon(o.icon) + '</span>' : '') +
+                        '<span class="ol"><span class="ot">' + U.esc(o.label) + '</span>' + (o.desc ? '<span class="od">' + U.esc(o.desc) + '</span>' : '') + '</span>' +
+                        (o.sub ? '<span class="ov">' + U.esc(o.sub) + '</span>' : '') +
+                        (cfg.mode === 'radio' && o.on ? App.icon('check', 'okc') : '');
                 },
                 onOk: function (i) { if (cfg.onOption) cfg.onOption(i, dlg); },
                 nb: { down: 'buttons' }
@@ -109,9 +115,26 @@
     /** Odabir jedne vrijednosti (radio). Promise<value|null>. */
     D.choose = function (title, options, selected, caption) {
         return new Promise(function (resolve) {
-            var opts = options.map(function (o) { return { label: o.label, value: o.value, sub: o.sub, on: o.value === selected }; });
+            var opts = options.map(function (o) { return { label: o.label, desc: o.desc, icon: o.icon, value: o.value, sub: o.sub, on: o.value === selected }; });
             D.open({
                 title: title, caption: caption, options: opts, mode: 'radio', width: 900,
+                buttons: [{ label: t('cancel'), act: 'cancel' }],
+                onOption: function (i, dlg) { dlg.close(); resolve(opts[i].value); },
+                onButton: function (act, dlg) { dlg.close(); resolve(null); },
+                onBack: function (dlg) { dlg.close(); resolve(null); }
+            });
+        });
+    };
+
+    /**
+     * Izbor radnje (Android OptionDialog): kartice s ikonom, naslovom i opisom + Cancel.
+     * options: [{value, label, desc, icon, danger}]. Promise<value|null>.
+     */
+    D.options = function (title, options, caption) {
+        return new Promise(function (resolve) {
+            var opts = options.map(function (o) { return { label: o.label, value: o.value, desc: o.desc, icon: o.icon, danger: o.danger, on: !!o.on }; });
+            D.open({
+                title: title, caption: caption, options: opts, mode: 'radio', width: 1100,
                 buttons: [{ label: t('cancel'), act: 'cancel' }],
                 onOption: function (i, dlg) { dlg.close(); resolve(opts[i].value); },
                 onButton: function (act, dlg) { dlg.close(); resolve(null); },

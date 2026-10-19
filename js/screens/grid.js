@@ -62,7 +62,7 @@
             var L = App.Lib;
             var fav = L.isFav(Grid.kind, it.id);
             var res = Grid.kind === 'vod' ? L.getResume('vod', it.id) : null;
-            return '<div class="pic" style="padding-top:150%">' + App.img(it.icon, '', it.name) +
+            return '<div class="pic" style="padding-top:150%">' + App.img(it.icon, Grid.kind === 'series' ? 'series' : 'poster') +
                 (it.rating ? '<div class="badge-rating" style="z-index:2">' + (Math.round(it.rating * 10) / 10) + '</div>' : '') +
                 (fav ? '<div class="badge-fav" style="z-index:2">' + App.icon('star') + '</div>' : '') +
                 (res && res.d ? '<div class="badge-prog" style="z-index:2"><div style="width:' + Math.round(100 * res.p / res.d) + '%"></div></div>' : '') +

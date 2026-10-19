@@ -15,7 +15,7 @@
         series_sort: 'added',
         pin: '0000',
         playlist_index: -1,
-        ratio: 0
+        ratio_mode: 'fill'
     };
     var settings = U.store.get('lbbe_settings', {}) || {};
 
@@ -54,77 +54,140 @@
             Lib.reset();
             Lib.url = url;
             Lib.key = 'pl_' + U.hash(url);
+            var id = Lib.loadId = (Lib.loadId || 0) + 1;
             progress = progress || function () { };
             var acc = App.Xtream.parse(url);
             if (acc) {
                 App.Xtream.set(acc);
-                return Lib.loadXtream(progress).then(null, function (err) {
-                    if (err && err.fatal) throw err;
+                return Lib.loadXtream(progress, id).then(null, function (err) {
+                    if (err && (err.fatal || err.cancelled)) throw err;
                     U.log('Xtream API failed, trying M3U', err);
                     // Rezerva: isti URL kao M3U. Ako ni to ne uspije, prijavi izvornu (Xtream) gresku.
-                    return Lib.loadM3u(url, progress).then(null, function () { throw err; });
+                    return Lib.loadM3u(url, progress, id).then(null, function (e2) { if (e2 && e2.cancelled) throw e2; throw err; });
                 });
             }
-            return Lib.loadM3u(url, progress);
+            return Lib.loadM3u(url, progress, id);
         },
+        /** Prekid ucitavanja ("Taking too long"): zakasnjeli odgovori se odbacuju. */
+        cancel: function () { Lib.loadId = (Lib.loadId || 0) + 1; },
+        alive: function (id) { if (id !== Lib.loadId) throw { cancelled: true }; },
 
-        loadXtream: function (progress) {
+        /** Xtream u 7 koraka kao Android: prijava, 3x kategorije, live, filmovi, serije. */
+        loadXtream: function (progress, id) {
             var X = App.Xtream;
+            var cats = {};
             Lib.type = 'xtream';
-            progress('connecting', 8);
+            progress('loading_signing_in', 4, 1, 7);
             return X.get('', '', 25000).then(function (auth) {
+                Lib.alive(id);
                 if (!auth || typeof auth !== 'object') throw { status: 0, parse: true };
                 var ui = auth.user_info;
-                if (ui && (ui.auth === 0 || ui.auth === '0')) throw { status: 401, fatal: true };
-                if (ui && ui.status && /expired|banned|disabled/i.test(ui.status)) throw { status: 403, fatal: true, expired: true };
+                if (ui && (ui.auth === 0 || ui.auth === '0')) throw { status: 401, fatal: true, auth: true };
+                if (ui && ui.status && /expired/i.test(ui.status)) throw { status: 403, fatal: true, expired: true };
+                if (ui && ui.status && /banned|disabled/i.test(ui.status)) throw { status: 403, fatal: true, auth: true };
                 Lib.userInfo = ui || null;
                 Lib.serverInfo = auth.server_info || null;
                 if (!ui && !auth.server_info) throw { status: 0, parse: true };
-                progress('loading_live', 20);
-                return Promise.all([
-                    X.get('get_live_categories').then(null, function () { return []; }),
-                    X.get('get_live_streams', '', 90000)
-                ]);
+                progress('loading_live_categories', 12, 2, 7);
+                return X.get('get_live_categories', '', 45000).then(null, function () { return []; });
             }).then(function (r) {
-                Lib.build('live', U.toArray(r[0]), U.toArray(r[1]));
-                progress('loading_movies', 45);
-                return Promise.all([
-                    X.get('get_vod_categories').then(null, function () { return []; }),
-                    X.get('get_vod_streams', '', 120000).then(null, function () { return []; })
-                ]);
+                Lib.alive(id); cats.live = U.toArray(r);
+                progress('loading_vod_categories', 18, 3, 7);
+                return X.get('get_vod_categories', '', 45000).then(null, function () { return []; });
             }).then(function (r) {
-                Lib.build('vod', U.toArray(r[0]), U.toArray(r[1]));
-                progress('loading_series', 72);
-                return Promise.all([
-                    X.get('get_series_categories').then(null, function () { return []; }),
-                    X.get('get_series', '', 120000).then(null, function () { return []; })
-                ]);
+                Lib.alive(id); cats.vod = U.toArray(r);
+                progress('loading_series_categories', 24, 4, 7);
+                return X.get('get_series_categories', '', 45000).then(null, function () { return []; });
             }).then(function (r) {
-                Lib.build('series', U.toArray(r[0]), U.toArray(r[1]));
-                progress('preparing', 95);
+                Lib.alive(id); cats.series = U.toArray(r);
+                progress('loading_live', 30, 5, 7);
+                return X.get('get_live_streams', '', 180000);
+            }).then(function (r) {
+                Lib.alive(id);
+                Lib.build('live', cats.live, U.toArray(r));
+                progress('loading_vod', 50, 6, 7);
+                return X.get('get_vod_streams', '', 180000).then(null, function () { return []; });
+            }).then(function (r) {
+                Lib.alive(id);
+                Lib.build('vod', cats.vod, U.toArray(r));
+                progress('loading_series', 75, 7, 7);
+                return X.get('get_series', '', 180000).then(null, function () { return []; });
+            }).then(function (r) {
+                Lib.alive(id);
+                Lib.build('series', cats.series, U.toArray(r));
+                progress('loading_starting', 98, 7, 7);
                 if (!Lib.live.items.length && !Lib.vod.items.length && !Lib.series.items.length) {
                     throw { status: 0, empty: true, fatal: true };
                 }
+                Lib.saveCache();
             });
         },
 
-        loadM3u: function (url, progress) {
+        /** M3U u 2 koraka: download (%, MB, MB/s) i obrada. */
+        loadM3u: function (url, progress, id) {
             Lib.type = 'm3u';
-            progress('connecting', 10);
+            var t0 = U.now();
+            progress('loading_download', 3, 1, 2);
             return U.http({
-                url: url, type: 'text', timeout: 120000,
+                url: url, type: 'text', timeout: 300000,
                 onProgress: function (e) {
-                    if (e && e.lengthComputable && e.total) progress('loading', 10 + Math.round(60 * e.loaded / e.total));
+                    if (!e || id !== Lib.loadId) return;
+                    var mb = e.loaded / 1048576, sec = Math.max(0.2, (U.now() - t0) / 1000);
+                    var speed = (mb / sec).toFixed(1) + ' MB/s';
+                    if (e.lengthComputable && e.total) {
+                        var pct = Math.round(100 * e.loaded / e.total);
+                        progress('loading_download', 3 + Math.round(0.8 * pct), 1, 2, pct + '%  \u00b7  ' + mb.toFixed(1) + ' / ' + (e.total / 1048576).toFixed(1) + ' MB  \u00b7  ' + speed);
+                    } else {
+                        progress('loading_download', 40, 1, 2, mb.toFixed(1) + ' MB  \u00b7  ' + speed);
+                    }
                 }
             }).then(function (text) {
-                progress('preparing', 80);
+                Lib.alive(id);
+                progress('loading_processing', 88, 2, 2);
                 if (typeof text !== 'string' || text.indexOf('#EXTINF') < 0) throw { status: 0, empty: true, fatal: true };
                 Lib.parseM3u(text);
                 if (!Lib.live.items.length && !Lib.vod.items.length && !Lib.series.items.length) {
                     throw { status: 0, empty: true, fatal: true };
                 }
-                progress('preparing', 95);
+                progress('loading_starting', 98, 2, 2);
+                Lib.saveCache();
+            }, function (err) {
+                if (err && !err.cancelled && !err.empty) err.m3u = true;
+                throw err;
             });
+        },
+
+        /* ---------------- spremljeni podaci (IndexedDB) ---------------- */
+        /** Kopija ucitane liste: "Continue with saved data" kad server liste ne radi. */
+        saveCache: function () {
+            if (!App.Cache || !App.Cache.available()) return;
+            var strip = function (K) {
+                return { cats: K.cats.map(function (c) { return { id: c.id, name: c.name }; }), items: K.items };
+            };
+            App.Cache.put({
+                key: Lib.key, url: Lib.url, type: Lib.type, savedAt: U.now(),
+                userInfo: Lib.userInfo, serverInfo: Lib.serverInfo,
+                live: strip(Lib.live), vod: strip(Lib.vod), series: strip(Lib.series)
+            });
+        },
+        /** Ucitaj spremljenu kopiju liste. Promise<boolean>. */
+        loadCache: function (url) {
+            if (!App.Cache || !App.Cache.available()) return Promise.resolve(false);
+            var key = 'pl_' + U.hash(url);
+            return App.Cache.get(key).then(function (d) {
+                if (!d || !d.live) return false;
+                Lib.reset();
+                Lib.url = url; Lib.key = key; Lib.type = d.type;
+                Lib.userInfo = d.userInfo || null; Lib.serverInfo = d.serverInfo || null;
+                Lib.cacheTime = d.savedAt;
+                if (Lib.type === 'xtream') { var acc = App.Xtream.parse(url); if (acc) App.Xtream.set(acc); }
+                ['live', 'vod', 'series'].forEach(function (kind) { Lib.indexPlain(kind, d[kind].cats.map(function (c) { return { category_id: c.id, category_name: c.name }; }), d[kind].items || []); });
+                return Lib.live.items.length + Lib.vod.items.length + Lib.series.items.length > 0;
+            });
+        },
+        hasCache: function (url) {
+            if (!App.Cache || !App.Cache.available()) return Promise.resolve(false);
+            return App.Cache.has('pl_' + U.hash(url));
         },
 
         /* ---------------- normalizacija ---------------- */
@@ -188,7 +251,7 @@
             var live = [], vod = [], seriesEps = [];
             var cats = { live: {}, vod: {}, series: {} };
             var catList = { live: [], vod: [], series: [] };
-            var cur = null, num = 0;
+            var cur = null, num = 0, seen = {};
             for (var i = 0; i < lines.length; i++) {
                 var line = lines[i].trim();
                 if (!line) continue;
@@ -221,11 +284,11 @@
                     epg: cur.tvgId || ''
                 };
                 if (kind === 'live') {
-                    base.id = 'm' + num;
+                    base.id = stableId('m', url, seen);
                     base.archive = cur.catchup ? true : false;
                     live.push(base);
                 } else if (kind === 'vod') {
-                    base.id = 'v' + num;
+                    base.id = stableId('v', url, seen);
                     base.ext = (url.match(/\.([a-z0-9]{2,4})(\?|$)/i) || [])[1] || 'mp4';
                     base.added = num;
                     vod.push(base);
@@ -464,6 +527,16 @@
         };
     }
 
+    /**
+     * Stabilan ID za M3U stavke (iz URL-a / imena), da favoriti, povijest i nastavak prezive osvjezavanje
+     * liste (Android: "Series favourites were lost on every M3U refresh").
+     */
+    function stableId(prefix, key, seen) {
+        var id = prefix + U.hash(key);
+        if (seen[id]) { seen[id]++; id += '_' + seen[id]; } else seen[id] = 1;
+        return id;
+    }
+
     /** #EXTINF:-1 tvg-id="x" tvg-logo="y" group-title="z",Ime kanala */
     function parseExtinf(line) {
         var res = { name: '', group: '', logo: '', tvgId: '', tvgName: '', catchup: '' };
@@ -490,7 +563,7 @@
 
     /** M3U serije: "Ime S01 E02" / "Ime S01E02" / "Ime 1x02" -> serija > sezona > epizoda. */
     function groupSeries(eps) {
-        var map = {}, list = [];
+        var map = {}, list = [], seenS = {};
         eps.forEach(function (e, i) {
             var m = e.name.match(/^(.*?)[\s._-]*[Ss](\d{1,2})[\s._-]*[Ee](\d{1,3})(.*)$/) || e.name.match(/^(.*?)[\s._-]+(\d{1,2})x(\d{1,3})(.*)$/);
             var sName = m ? m[1].trim() : e.name;
@@ -500,7 +573,7 @@
             var s = map[key];
             if (!s) {
                 s = map[key] = {
-                    id: 's' + (list.length + 1), name: sName || e.name, icon: e.icon, cat: e.cat, num: list.length + 1,
+                    id: stableId('s', e.cat + '|' + sName.toLowerCase(), seenS), name: sName || e.name, icon: e.icon, cat: e.cat, num: list.length + 1,
                     added: e.num, rating: 0, year: '', plot: '', genre: '', cast: '', director: '', trailer: '', backdrop: '',
                     m3uSeasons: {}
                 };
@@ -508,7 +581,7 @@
             }
             if (!s.m3uSeasons[season]) s.m3uSeasons[season] = [];
             s.m3uSeasons[season].push({
-                id: 'e' + i, num: epNum, title: (m && m[4] && m[4].replace(/^[\s:._-]+/, '')) || (t('episode') + ' ' + epNum),
+                id: stableId('e', e.url, seenS), num: epNum, title: (m && m[4] && m[4].replace(/^[\s:._-]+/, '')) || (t('episode') + ' ' + epNum),
                 url: e.url, ext: (e.url.match(/\.([a-z0-9]{2,4})(\?|$)/i) || [])[1] || 'mp4', icon: e.icon
             });
             if (!s.icon && e.icon) s.icon = e.icon;

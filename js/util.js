@@ -137,7 +137,10 @@ var U = App.U = {
                         resolve(txt);
                     }
                 } else {
-                    reject({ status: xhr.status, statusText: xhr.statusText || '' });
+                    // Tijelo greske treba (npr. 403 {"error":"pairing_required","pairing_code":...}).
+                    var body = '';
+                    try { body = xhr.responseText || ''; } catch (e) { }
+                    reject({ status: xhr.status, statusText: xhr.statusText || '', body: body, data: U.parseJSON(body) });
                 }
             };
             xhr.ontimeout = function () {
@@ -154,7 +157,7 @@ var U = App.U = {
             try { xhr.send(opts.body || null); } catch (e) { done = true; reject({ status: 0, statusText: 'network' }); }
         });
     },
-    getJSON: function (url, timeout) { return U.http({ url: url, type: 'json', timeout: timeout }); },
+    getJSON: function (url, timeout, headers) { return U.http({ url: url, type: 'json', timeout: timeout, headers: headers }); },
     getText: function (url, timeout) { return U.http({ url: url, type: 'text', timeout: timeout }); },
     /** JSON s BOM-om / smecem ispred; undefined ako nije JSON. */
     parseJSON: function (txt) {
