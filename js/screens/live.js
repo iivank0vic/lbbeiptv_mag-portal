@@ -41,7 +41,7 @@
                 nb: { left: 'cats' }
             });
             layer.zones.channels = list;
-            App.Player.on(function (ev) { if (ev === 'state' || ev === 'media') Live.paintStatus(); });
+            App.Player.on(function (ev) { if (ev === 'state' || ev === 'media' || ev === 'reconnect') Live.paintStatus(); });
         },
 
         /* ---------------- kategorije / kanali ---------------- */
@@ -142,11 +142,13 @@
             var ch = Live.channels[i];
             if (!ch) return '';
             return '<span class="num">' + U.esc(ch.num || i + 1) + '</span>' +
-                '<span class="logo">' + (U.safeUrl(ch.icon) ? '<img src="' + U.safeUrl(ch.icon) + '" alt="" onerror="this.style.display=\'none\'" />' : '') + '</span>' +
+                '<span class="logo">' + (U.safeUrl(ch.icon) ? '<img src="' + U.safeUrl(ch.icon) + '" alt="" onerror="this.style.display=\'none\'" />' : App.icon('phTv', 'ph')) + '</span>' +
                 '<span class="nm">' + U.esc(ch.name) + '</span>' +
                 (ch.archive ? App.icon('catchup', 'catch') : '') +
                 (App.Lib.isFav('live', ch.id) ? App.icon('star', 'star') : '');
         },
+
+        clearEpg: function () { epgCache = {}; },
 
         /* ---------------- fokus / EPG ---------------- */
         onFocus: function (i) {
@@ -217,6 +219,7 @@
             var P = App.Player;
             if (!P.media || P.full || P.media.kind !== 'live') { U.hide(msg); return; }
             if (P.state === 'loading') { msg.innerHTML = '<div class="spinner"></div>'; U.show(msg); }
+            else if (P.state === 'reconnecting') { msg.innerHTML = '<div class="spinner"></div><div class="t-caption">' + U.esc(P.reconnectText()) + '</div>'; U.show(msg); }
             else if (P.state === 'error') { msg.innerHTML = U.esc(t('stream_error')); U.show(msg); }
             else U.hide(msg);
         },

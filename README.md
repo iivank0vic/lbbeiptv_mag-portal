@@ -25,15 +25,26 @@ Promjenu u zajedničkom kodu napravi u jednom repozitoriju i prenesi u ostale:
   redovi: najnoviji filmovi, najnovije serije, omiljeni kanali.
 - **Live TV** — traka | kategorije | kanali | pregled + EPG. OK = pregled, OK na kanal koji svira = puni ekran.
   DESNO na kanalu sa sat ikonom = catch-up (arhiva). Žuta = favorit, crvena/MENU = opcije, brojevi = skok na kanal.
+- **Učitavanje** — koraci s napretkom (Xtream 7 koraka, M3U s MB / MB/s), nakon 15 s "Taking too long? Options";
+  greške s jasnim razlogom i akcijama (Retry, Continue with saved data, Clear cache, Choose playlist, More options).
+  Kopija zadnje playliste u IndexedDB-u (ne u MAG lite načinu).
 - **Puni ekran** — OSD s EPG-om; GORE/DOLJE i CH± mijenjaju kanal; BACK izlazi.
-- **Catch-up / filmovi / epizode** — LIJEVO/DESNO premotavanje (30 s / 1 min, držanje ubrzava),
-  REW/FF veliki korak, OK prikazuje kontrole, PLAY/PAUSE pauza. Nastavak gledanja od zadnje pozicije.
+  Prekid streama: 3 automatska ponovna spajanja (1 / 2 / 4 s, "Reconnecting… (n/3)"), tek onda poruka.
+- **Slika** — Fill screen (zadano: popuni ekran, reže najviše 5 % po rubu), Fit, Zoom, Stretch, 16:9, 4:3;
+  pamti se (Settings → Aspect ratio ili tipka u OSD-u), toast "Picture: …". AVPlay: Fit/Auto/Stretch/16:9/4:3; MAG svoje.
+- **Catch-up** — LIJEVO/DESNO premotavanje (držanje ubrzava), REW/FF veliki korak, OK kontrole.
+- **Filmovi / epizode (OSD kao Android 2.2.6)** — gore naslov + podnaslov + sat; traka napretka (fokusabilna,
+  LIJEVO/DESNO ±1 %) s proteklim i preostalim vremenom; lijevo audio/titlovi, sredina prethodna / −30 s /
+  play / +30 s / sljedeća, desno slika + info (film) ili red epizoda sezone (serija). Nastavak od zadnje pozicije.
 - **Movies / Series** — kategorije + grid postera, sortiranje, info ekran (opis, ocjena, trailer, favorit),
   sezone i epizode, automatski sljedeća epizoda.
 - **Search** — u trenutnoj sekciji; s Home/Settings bira se Live / Movies / Series.
 - **Settings** — jezik, format vremena, network test, format streama (TS / HLS), player engine (Samsung),
   sortiranje kanala, skrivanje kategorija, roditeljski PIN (zadano `0000`).
-- **Playlists** i **Account** (MAC, stanje pretplate, istek, QR kod za aktivaciju / dodavanje playliste).
+- **Playlists** i **Account** (MAC, stanje pretplate, istek + "N days left", QR kod za aktivaciju / dodavanje playliste).
+- **Aktivacija** — ekrani s oznakom (trial / ističe / isteklo / bez playliste / pairing), trial i "ističe"
+  nastavljaju sami nakon 8 s. Pairing (API-SECURITY): 403 `pairing_required` → kod + QR `mylist?mac=&code=`;
+  tajni ključ uređaja (`X-Device-Key`) šalje se uz svaki poziv portala.
 - Plava tipka / MENU kruži Live → Movies → Series. BACK ide korak po korak do dijaloga za izlaz.
 
 ## Struktura
@@ -48,11 +59,12 @@ js/util.js            HTTP (XHR), pohrana, formatiranje
 js/i18n.js            prijevodi sa servera + engleski fallback
 js/api.js             backend (playlist_information) i Xtream API
 js/library.js         postavke, učitavanje playliste (Xtream / M3U), favoriti, recent, nastavak
+js/cache.js           kopija playliste u IndexedDB-u ("Continue with saved data")
 js/nav.js             fokus i tipke (slojevi + zone)
 js/widgets.js         virtualna lista, virtualni grid, red kartica, grupa gumba
 js/dialogs.js         dijalozi (izbor, višestruki izbor, PIN, potvrda)
 js/player.js          AVPlay / HTML5 engine + kontroler
-js/screens/*.js       gate (aktivacija/greške), shell (traka+kategorije), home, grid, live,
+js/screens/*.js       gate (loader s koracima, aktivacija/pairing), shell (traka+kategorije), home, grid, live,
                       fullscreen (OSD), info (film/serija), settings, search
 ```
 
@@ -64,7 +76,7 @@ U pregledniku se koristi HTML5 player i nasumični ID uređaja (spremljen u loca
 
 ## Pakiranje
 
-**LG:** `ares-package ./` → `ares-install --device <tv> iptvlbbe.lg_3.0.0_all.ipk` → `ares-launch --device <tv> iptvlbbe.lg`
+**LG:** `ares-package ./` → `ares-install --device <tv> iptvlbbe.lg_3.1.0_all.ipk` → `ares-launch --device <tv> iptvlbbe.lg`
 (debug: `ares-inspect --device <tv> --app iptvlbbe.lg`).
 
 **Samsung:** Tizen Studio → Build Signed Package (certifikat autora + distributora), ili

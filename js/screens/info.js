@@ -97,7 +97,8 @@
                     return {
                         id: U.str(e.id), num: parseInt(e.episode_num, 10) || (i + 1), title: U.str(e.title) || (t('episode') + ' ' + (i + 1)),
                         ext: e.container_extension || 'mp4', plot: info.plot || '', duration: info.duration || '',
-                        durSec: parseInt(info.duration_secs, 10) || 0, season: parseInt(k, 10) || 1, url: e.direct_source && /^https?:/.test(e.direct_source) ? '' : ''
+                        durSec: parseInt(info.duration_secs, 10) || 0, season: parseInt(k, 10) || 1, url: '',
+                        image: U.safeUrl(info.movie_image || info.cover_big || '') || ''
                     };
                 });
                 list.sort(function (a, b) { return a.num - b.num; });
@@ -139,7 +140,7 @@
             if (inf.rating) facts.push('<span class="star">★ ' + inf.rating + '</span>');
             if (inf.genre) facts.push('<span>' + U.esc(inf.genre) + '</span>');
             var html = (U.safeUrl(inf.backdrop) ? '<div class="backdrop" style="background-image:url(\'' + U.safeUrl(inf.backdrop) + '\')"></div>' : '') +
-                '<div class="shade"></div><div class="info-body"><div class="poster">' + App.img(inf.poster, '', inf.name) + '</div><div class="meta">' +
+                '<div class="shade"></div><div class="info-body"><div class="poster">' + App.img(inf.poster, I.kind === 'series' ? 'series' : 'poster') + '</div><div class="meta">' +
                 '<div class="t-overline">' + U.esc(I.kind === 'vod' ? t('movies') : t('tv_shows')) + '</div>' +
                 '<div class="t-title">' + U.esc(inf.name) + '</div>' +
                 '<div class="facts">' + facts.join('') + '</div>' +
@@ -252,7 +253,9 @@
             var url = it.url || App.Xtream.streamUrl('movie', it.id, inf.ext);
             App.Fullscreen.openVod({
                 kind: 'vod', item: it, url: url, title: inf.name, subtitle: [inf.year, inf.genre].filter(Boolean).join('  ·  '),
-                start: start || 0, resumeKey: { kind: 'vod', id: it.id }
+                start: start || 0, resumeKey: { kind: 'vod', id: it.id },
+                about: { plot: inf.plot || '', facts: [inf.year, inf.duration, inf.genre, inf.rating ? '★ ' + inf.rating : ''].filter(Boolean).join('  ·  '),
+                    director: inf.director || '', cast: inf.cast || '' }
             });
         },
         playEpisode: function (s, e, resume) {
@@ -261,26 +264,9 @@
             if (!ep) return;
             var name = I.info().name;
             App.Lib.pushRecent('series', I.item.id);
-            var last = I.lastMap();
-            last[I.item.id] = ep.id;
-            U.store.set(App.Lib.k('series', 'last'), last);
             var r = App.Lib.getResume('series', 'ep' + ep.id);
-            var media = {
-                kind: 'episode', item: ep,
-                url: ep.url || App.Xtream.streamUrl('series', ep.id, ep.ext),
-                title: name,
-                subtitle: t('season_short') + season.num + ' ' + t('episode_short') + ep.num + '  ·  ' + ep.title,
-                start: r ? r.p : 0,
-                resumeKey: { kind: 'series', id: 'ep' + ep.id },
-                next: function () {
-                    var ns = s, ne = e + 1;
-                    if (ne >= season.episodes.length) { ns = s + 1; ne = 0; }
-                    if (!I.seasons[ns] || !I.seasons[ns].episodes[ne]) return null;
-                    if (media._next) return media._next;
-                    media._next = I.episodeMedia(ns, ne);
-                    return media._next;
-                }
-            };
+            var media = I.episodeMedia(s, e);
+            media.start = r ? r.p : 0;
             if (r && !resume) {
                 // Kao Android: pitaj nastavak ili ispocetka.
                 App.Dialog.confirm(t('resume'), t('resume_playback_from_last_position') + ' (' + U.fmtDur(r.p) + ')', t('resume'), t('start_over')).then(function (yes) {
@@ -302,17 +288,29 @@
                 subtitle: t('season_short') + season.num + ' ' + t('episode_short') + ep.num + '  ·  ' + ep.title,
                 start: 0,
                 resumeKey: { kind: 'series', id: 'ep' + ep.id },
+                // Za red epizoda u OSD-u (Android 2.2.6): epizode iste sezone i trenutna pozicija.
+                episodes: season.episodes, epIndex: e, seasonNum: season.num,
+                at: function (i) { return season.episodes[i] ? I.episodeMedia(s, i) : null; },
                 next: function () {
                     var ns = s, ne = e + 1;
                     if (ne >= season.episodes.length) { ns = s + 1; ne = 0; }
                     if (!I.seasons[ns] || !I.seasons[ns].episodes[ne]) return null;
                     if (!media._next) media._next = I.episodeMedia(ns, ne);
                     return media._next;
+                },
+                prev: function () {
+                    var ns = s, ne = e - 1;
+                    if (ne < 0) { ns = s - 1; if (!I.seasons[ns]) return null; ne = I.seasons[ns].episodes.length - 1; }
+                    return I.seasons[ns] && I.seasons[ns].episodes[ne] ? I.episodeMedia(ns, ne) : null;
                 }
             };
-            var last = I.lastMap();
-            last[I.item.id] = ep.id;
-            U.store.set(App.Lib.k('series', 'last'), last);
+            // "Zadnja gledana" se biljezi tek kad epizoda krene (next()/prev() samo grade medij).
+            var seriesId = I.item.id;
+            media.onPlay = function () {
+                var last = U.store.get(App.Lib.k('series', 'last'), {});
+                last[seriesId] = ep.id;
+                U.store.set(App.Lib.k('series', 'last'), last);
+            };
             return media;
         },
         trailer: function (code) {

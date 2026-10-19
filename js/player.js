@@ -6,10 +6,28 @@
  * ponovni pokusaj kod greske i spremanje pozicije nastavka.
  */
 (function () {
+    /*
+     * Nacini slike u punom ekranu (Android AspectModes): 'fill' (zadano: popuni ekran, ali odrezi najvise
+     * 5 % po rubu — logo kanala ostaje), 'fit', 'zoom' (reze sve sto ne stane), 'stretch', '16_9', '4_3'.
+     * Mali pregled je uvijek Fit. AVPlay ne moze rezati sliku, pa nema fill/zoom.
+     */
     var RATIOS = {
-        html5: ['zoom', 'fit', 'stretch'],
-        avplay: ['fit', 'stretch', 'auto']
+        html5: ['fill', 'fit', 'zoom', 'stretch', '16_9', '4_3'],
+        avplay: ['fit', 'auto', 'stretch', '16_9', '4_3']
     };
+    var SAFE_CROP = 0.05;
+    /** [w, h] slike unutar okvira fw x fh (okvir reze visak). aspect <= 0 = jos nepoznat. */
+    function aspectSize(mode, fw, fh, aspect) {
+        if (mode === '16_9') aspect = 16 / 9;
+        else if (mode === '4_3') aspect = 4 / 3;
+        if (mode === 'stretch' || !(aspect > 0)) return [fw, fh];
+        var fitW, fitH;
+        if (aspect > fw / fh) { fitW = fw; fitH = fw / aspect; } else { fitH = fh; fitW = fh * aspect; }
+        var cover = Math.max(fw / fitW, fh / fitH);
+        var k = mode === 'zoom' ? cover : (mode === 'fill' ? Math.min(cover, 1 / (1 - 2 * SAFE_CROP)) : 1);
+        return [Math.round(fitW * k), Math.round(fitH * k)];
+    }
+    App.aspectSize = aspectSize;
 
     /* ======================= HTML5 <video> ======================= */
     function Html5Engine(layer) {
@@ -30,8 +48,12 @@
         v.addEventListener('error', function () { if (self.url) self.fire('error'); });
         v.addEventListener('loadedmetadata', function () {
             if (self.startAt > 0) { try { v.currentTime = self.startAt; } catch (e) { } self.startAt = 0; }
+            self.applyGeom();
             self.fire('ready');
         });
+        v.addEventListener('resize', function () { self.applyGeom(); });
+        this.frame = [0, 0, 0, 0];
+        this.mode = 'fit';
         v.addEventListener('timeupdate', function () { self.fire('time'); });
     }
     Html5Engine.prototype = {
@@ -72,12 +94,25 @@
         },
         seek: function (sec) { try { this.el.currentTime = Math.max(0, sec); } catch (e) { } },
         setRect: function (x, y, w, h) {
-            var s = this.el.style;
-            s.left = x + 'px'; s.top = y + 'px'; s.width = w + 'px'; s.height = h + 'px';
+            this.frame = [x, y, w, h];
+            this.applyGeom();
         },
-        setRatio: function (mode) {
-            var fit = { zoom: 'cover', fit: 'contain', stretch: 'fill', auto: 'contain' }[mode] || 'contain';
-            this.el.style.objectFit = fit;
+        setRatio: function (mode) { this.mode = mode; this.applyGeom(); },
+        /** Velicina <video> prema nacinu; #video-layer reze sve izvan ekrana. */
+        applyGeom: function () {
+            var f = this.frame, s = this.el.style, v = this.el;
+            var aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 0;
+            var mode = this.mode || 'fit';
+            if (!(f[2] > 0 && f[3] > 0) || mode === 'fit' || mode === 'auto' || (!aspect && mode !== 'stretch' && mode !== '16_9' && mode !== '4_3')) {
+                s.left = f[0] + 'px'; s.top = f[1] + 'px'; s.width = f[2] + 'px'; s.height = f[3] + 'px';
+                s.objectFit = 'contain';
+                return;
+            }
+            var wh = aspectSize(mode, f[2], f[3], aspect);
+            s.left = Math.round(f[0] + (f[2] - wh[0]) / 2) + 'px';
+            s.top = Math.round(f[1] + (f[3] - wh[1]) / 2) + 'px';
+            s.width = wh[0] + 'px'; s.height = wh[1] + 'px';
+            s.objectFit = 'fill';
         },
         tracks: function (kind) {
             var out = [];
@@ -190,11 +225,18 @@
         applyRect: function () {
             var st = this.state();
             if (st === 'NONE') return;
-            try { this.av().setDisplayRect(this.rect[0], this.rect[1], this.rect[2], this.rect[3]); } catch (e) { }
+            var r = this.rect;
+            // 16:9 / 4:3: prisilni omjer = FULL_SCREEN u centriranom pravokutniku tog omjera.
+            if (this.ratio === '16_9' || this.ratio === '4_3') {
+                var wh = aspectSize(this.ratio, r[2], r[3], 0);
+                r = [Math.round(r[0] + (r[2] - wh[0]) / 2), Math.round(r[1] + (r[3] - wh[1]) / 2), wh[0], wh[1]];
+            }
+            try { this.av().setDisplayRect(r[0], r[1], r[2], r[3]); } catch (e) { }
         },
-        setRatio: function (mode) { this.ratio = mode; this.applyRatio(); },
+        setRatio: function (mode) { this.ratio = mode; this.applyRatio(); this.applyRect(); },
         applyRatio: function () {
-            var m = { fit: 'PLAYER_DISPLAY_MODE_LETTER_BOX', stretch: 'PLAYER_DISPLAY_MODE_FULL_SCREEN', auto: 'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO', zoom: 'PLAYER_DISPLAY_MODE_FULL_SCREEN' }[this.ratio] || 'PLAYER_DISPLAY_MODE_LETTER_BOX';
+            var m = { fit: 'PLAYER_DISPLAY_MODE_LETTER_BOX', stretch: 'PLAYER_DISPLAY_MODE_FULL_SCREEN', auto: 'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO',
+                '16_9': 'PLAYER_DISPLAY_MODE_FULL_SCREEN', '4_3': 'PLAYER_DISPLAY_MODE_FULL_SCREEN' }[this.ratio] || 'PLAYER_DISPLAY_MODE_LETTER_BOX';
             try { this.av().setDisplayMethod(m); } catch (e) { }
         },
         tracks: function (kind) {
@@ -244,7 +286,8 @@
         state: 'idle',      // idle | loading | playing | paused | error | ended
         listeners: [],
         full: false,
-        retried: false,
+        attempt: 0,
+        lastTime: 0,
 
         init: function () {
             var ids = App.Platform.engines.map(function (e) { return e.id; });
@@ -265,12 +308,19 @@
             P.engine = new E(layer);
             P.engine.on({
                 ready: function () { P.emit('ready'); },
-                playing: function () { P.retried = false; P.setState('playing'); },
-                paused: function () { P.setState('paused'); },
-                buffering: function () { if (P.state !== 'paused') P.setState('loading'); },
+                playing: function () { P.attempt = 0; clearTimeout(P.stallTimer); P.setState('playing'); },
+                paused: function () { clearTimeout(P.stallTimer); P.setState('paused'); },
+                buffering: function () {
+                    if (P.state === 'paused' || P.state === 'reconnecting') return;
+                    P.setState('loading');
+                    // Stream koji "visi" bez greske: nakon 20 s isto kao prekid (ponovno spajanje).
+                    var m = P.media;
+                    clearTimeout(P.stallTimer);
+                    P.stallTimer = setTimeout(function () { if (P.media === m && m && P.state === 'loading') P.onError(); }, 20000);
+                },
                 ended: function () { P.saveResume(true); P.setState('ended'); },
                 error: function () { P.onError(); },
-                time: function () { P.emit('time'); }
+                time: function () { var tm = P.engine.time(); if (tm > 0) P.lastTime = tm; P.emit('time'); }
             });
             P.hideVideo();
         },
@@ -285,7 +335,10 @@
         play: function (media) {
             P.saveResume();
             P.media = media;
-            P.retried = false;
+            P.attempt = 0;
+            clearTimeout(P.stallTimer);
+            P.lastTime = media.start || 0;
+            clearTimeout(P.retryTimer);
             P.setState('loading');
             P.engine.open(media.url, { start: media.start || 0 });
             P.engine.setRatio(P.full ? P.ratioMode() : 'fit');
@@ -293,22 +346,44 @@
         },
         reopen: function () {
             if (!P.media) return;
+            P.attempt = 0;
             P.setState('loading');
             P.engine.open(P.media.url, { start: P.media.kind === 'vod' || P.media.kind === 'episode' ? P.engine.time() : 0 });
         },
         stop: function () {
             P.saveResume();
+            clearTimeout(P.retryTimer);
+            clearTimeout(P.stallTimer);
             P.media = null;
             if (P.engine) P.engine.stop();
             P.setState('idle');
             P.hideVideo();
             P.emit('media');
         },
+        /**
+         * Prekid / greska streama: do 3 automatska ponovna spajanja (1 s, 2 s, 4 s), film/epizoda od
+         * zadnje pozicije; tek onda jasna poruka umjesto crnog ekrana (Android 2.2.6).
+         */
+        MAX_RETRY: 3,
+        reconnectText: function () {
+            return t('play_reconnecting', 'Reconnecting\u2026 (%1/%2)').replace('%1', P.attempt).replace('%2', P.MAX_RETRY);
+        },
         onError: function () {
-            // Live: jedan tihi ponovni pokusaj (serveri cesto odbiju prvu konekciju).
-            if (P.media && !P.retried && (P.media.kind === 'live' || P.media.kind === 'catchup')) {
-                P.retried = true;
-                setTimeout(function () { if (P.media) P.engine.open(P.media.url, {}); }, 1500);
+            var m = P.media;
+            clearTimeout(P.stallTimer);
+            if (!m) { P.setState('error'); return; }
+            if (P.attempt < P.MAX_RETRY) {
+                P.attempt++;
+                P.setState('reconnecting');
+                P.emit('reconnect');
+                var media = m, at = P.lastTime;
+                clearTimeout(P.retryTimer);
+                P.retryTimer = setTimeout(function () {
+                    if (P.media !== media) return;
+                    var vod = media.kind === 'vod' || media.kind === 'episode';
+                    P.engine.open(media.url, { start: vod ? at : 0 });
+                    if (P.full) P.engine.setRatio(P.ratioMode());
+                }, 1000 * Math.pow(2, P.attempt - 1));
                 return;
             }
             P.setState('error');
@@ -343,14 +418,25 @@
             P.engine.setRect(0, 0, 0, 0);
         },
         ratioModes: function () { return P.engine ? P.engine.ratios : ['fit']; },
+        /** Zapamceni nacin (po imenu); ako ga engine nema, njegov zadani (prvi). */
         ratioMode: function () {
             var modes = P.ratioModes();
-            var i = App.Settings.get('ratio') || 0;
-            return modes[i] || modes[0];
+            var m = App.Settings.get('ratio_mode');
+            return modes.indexOf(m) >= 0 ? m : modes[0];
         },
-        setRatioIndex: function (i) {
-            App.Settings.set('ratio', i);
-            if (P.full) P.engine.setRatio(P.ratioMode());
+        setRatioMode: function (m) {
+            App.Settings.set('ratio_mode', m);
+            if (P.full) P.engine.setRatio(m);
+            App.toast(P.ratioLabel(m), 1800);
+        },
+        ratioLabel: function (m) {
+            var key = { fill: 'ratio_safe_fill', '16_9': 'ratio_16_9', '4_3': 'ratio_4_3' }[m] || ('ratio_' + m);
+            return t('picture', 'Picture') + ': ' + t(key, m);
+        },
+        /** Sljedeci nacin (tipka za omjer bez dijaloga). */
+        nextRatio: function () {
+            var modes = P.ratioModes();
+            P.setRatioMode(modes[(modes.indexOf(P.ratioMode()) + 1) % modes.length]);
         },
 
         /** Pozicija nastavka za filmove i epizode (kao Android "Resume"). */

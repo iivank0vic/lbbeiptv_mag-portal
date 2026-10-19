@@ -415,10 +415,24 @@
         name: 'mag',
         label: 'MAG',
         panelUrl: PANEL,
-        version: '3.0.0',
+        version: '3.1.0',
         engines: onTv ? [{ id: 'mag', label: 'MAG player' }] : [{ id: 'html5', label: 'HTML5' }],
         onTv: onTv,
         scale: 1,
+        /** Lite nacin: bez IndexedDB kopije playliste i ostalih teskih dodataka. */
+        lite: LITE,
+        /** Tajni kljuc uredaja (API-SECURITY.md) u MAG korisnickim podacima — prezivi brisanje localStoragea. */
+        deviceKeyStore: {
+            load: function () {
+                var v = call('LoadUserData', 'lbbe_device_key');
+                if (!v) { try { v = window.localStorage.getItem('lbbe_device_key'); } catch (e) { } }
+                return v || '';
+            },
+            save: function (v) {
+                call('SaveUserData', 'lbbe_device_key', v);
+                try { window.localStorage.setItem('lbbe_device_key', v); } catch (e) { }
+            }
+        },
 
         /**
          * Faktor od koordinata iz getBoundingClientRect do piksela grafike. Uz CSS zoom neki

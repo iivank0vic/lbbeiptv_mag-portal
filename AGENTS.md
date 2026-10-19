@@ -45,7 +45,18 @@ TV web klijent LBBE IPTV playera. **Izvor istine za izgled i ponašanje je `APP.
 - `timeshift.php` ne javlja trajanje: premotavanje = ponovno otvaranje s novim `start` (minutna preciznost).
 - Xtream `exp_date` null/0 = neograničeno. Neki serveri vraćaju objekt umjesto niza → `U.toArray`.
 - Ako Xtream API ne radi, isti URL se pokušava kao M3U; ako ni to ne uspije, prikazuje se izvorna greška.
-- localStorage je mali na TV-u: pozicije nastavka su ograničene na 300 zapisa po vrsti.
+- localStorage je mali na TV-u: pozicije nastavka su ograničene na 300 zapisa po vrsti. Playlista ide u
+  IndexedDB (`js/cache.js`, samo jedna); bez IndexedDB-a ili u MAG lite načinu cache tiho ne radi.
+- **Pairing / ključ uređaja (API-SECURITY.md):** `Api.deviceKey()` je 64 hex znaka, nastaje jednom; nikad se
+  ne prikazuje ni logira. 403 `{"error":"pairing_required"}` uvijek vodi na pairing ekran — tada se NE nastavlja
+  sa spremljenim podacima. "Clear all data" čuva `lbbe_device_key`, `lbbe_device_id`, `lbbe_device_token`.
+- **ID-jevi M3U stavki su stabilni** (hash URL-a / imena): favoriti i nastavak prežive ponovno učitavanje.
+  Ne vraćati redni broj kao ID.
+- **Slika:** naziv načina se pamti (`ratio_mode`), ne indeks; engine koji nema taj način koristi svoj prvi.
+  HTML5 sam računa veličinu `<video>` (`App.aspectSize`), `#video-layer` reže višak.
+- **Ponovno spajanje:** `Player.onError` → do 3 pokušaja; stanje `reconnecting` se prikazuje u pregledu i punom
+  ekranu. VOD nastavlja od `Player.lastTime`.
+- "Zadnja gledana epizoda" se upisuje tek kad epizoda krene (`media.onPlay`), ne kad se gradi `next()`/`prev()`.
 
 ## Provjera bez TV-a
 

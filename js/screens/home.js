@@ -15,7 +15,7 @@
             Home.recent = recent;
             var html = '<div class="home-scroll"><div class="home-inner" id="home-inner"><div class="hero-row">';
             if (recent) {
-                html += '<div class="hero-card" id="hero-card"><div class="hero-logo">' + img(recent.icon, 'images/logo.png') + '</div>' +
+                html += '<div class="hero-card" id="hero-card"><div class="hero-logo">' + img(recent.icon, 'channel') + '</div>' +
                     '<div class="hero-text"><div class="t-overline">' + U.esc(t('continue_watching')) + '</div>' +
                     '<div class="hero-title">' + U.esc(recent.name) + '</div>' +
                     '<div class="hero-sub">' + U.esc(L.categoryName('live', recent.cat) || t('live_tv')) + '</div></div>' +
@@ -63,8 +63,7 @@
                     el: U.byId('home-row-' + i), name: 'row' + i, items: d.items,
                     cardCls: d.key === 'live' ? 'ch' : '',
                     inner: function (it) {
-                        // Logotipi kanala su cesto prozirni PNG: tekst ispod bi se vidio kroz njih.
-                        return '<div class="pic">' + img(it.icon, '', d.key === 'live' && it.icon ? '' : it.name) +
+                        return '<div class="pic">' + img(it.icon, d.key === 'live' ? 'channel' : (d.key === 'series' ? 'series' : 'poster')) +
                             (d.key !== 'live' && it.rating ? '<div class="badge-rating">' + (Math.round(it.rating * 10) / 10) + '</div>' : '') +
                             '</div><div class="cap">' + U.esc(it.name) + '</div>';
                     },
@@ -120,12 +119,18 @@
             '<div class="q-lbl">' + U.esc(label) + '</div><div class="q-cnt">' + U.fmtNumber(count) + '</div></div>';
     }
 
-    /** Slika s rezervom: tekst (ime) ako slike nema ili se ne ucita. */
-    function img(src, fallback, name) {
-        var s = U.safeUrl(src) || U.safeUrl(fallback);
-        if (!s) return '<div class="ph">' + U.esc(name || '') + '</div>';
-        return (name ? '<div class="ph">' + U.esc(name) + '</div>' : '') +
-            '<img src="' + s + '" alt="" onerror="this.onerror=null;this.style.display=\'none\'" />';
+    /**
+     * Slika s placeholderom (Android placeholder_*): tamni gradijent + ikona, bez logotipa aplikacije.
+     * kind: 'poster' (film), 'series', 'episode', 'channel', 'signal'. Ako se slika ne ucita (404),
+     * sakrije se i vidi se placeholder ispod nje.
+     */
+    var PH_ICON = { poster: 'phMovie', series: 'phSeries', episode: 'phSeries', channel: 'phTv', signal: 'wifiOff' };
+    function img(src, kind) {
+        var s = U.safeUrl(src);
+        var ph = '<div class="ph ph-' + (kind || 'poster') + '">' + App.icon(PH_ICON[kind] || 'phMovie') + '</div>';
+        if (!s) return ph;
+        // Ucitana slika sakrije placeholder (logotipi kanala su cesto prozirni PNG).
+        return ph + '<img src="' + s + '" alt="" onload="var p=this.previousSibling;if(p)p.style.display=\'none\'" onerror="this.onerror=null;this.style.display=\'none\'" />';
     }
     App.img = img;
 })();
