@@ -30,10 +30,14 @@
             A.Loader.step('loading_connecting', 8);
             return fetchInfo().then(null, function (err) {
                 if (A.Api.pairingFrom(err) || (err && (err.status === 401 || err.status === 403))) throw err;
-                return new Promise(function (res) { setTimeout(res, 1500); }).then(fetchInfo);
+                // Server odgovara, ali uredaja nema (npr. 404 za nepoznat MAC): prvo upis (get_app_setting), pa ponovo.
+                var first = err && err.status > 0 ? A.Api.appSetting(A.mac).then(null, function () { }) : Promise.resolve();
+                return first.then(function () { return new Promise(function (res) { setTimeout(res, 1500); }); }).then(fetchInfo);
             });
         }).then(function (info) {
             U.store.set('lbbe_info_cache', { info: info, t: U.now(), mac: A.mac });
+            // Upis uredaja u bazu portala (stari klijent i Android to rade kod svakog starta).
+            A.Api.registerDevice(A.mac);
             A.useInfo(info);
             A.route();
         }, function (err) {

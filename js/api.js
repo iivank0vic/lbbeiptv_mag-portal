@@ -71,15 +71,26 @@
             return null;
         },
 
+        /** MAC u putanji s doslovnim ':' (kao Android Retrofit i stari LG klijent), ne %3A. */
+        macPath: function (mac) { return encodeURIComponent(mac || '').replace(/%3A/gi, ':'); },
+
         /** {mac_registered, urls[], expire_date, is_trial, languages[]} */
         playlistInformation: function (mac) {
-            return Api.portalGet('/playlist_information/' + encodeURIComponent(mac), 20000).then(function (data) {
+            return Api.portalGet('/playlist_information/' + Api.macPath(mac), 20000).then(function (data) {
                 if (!data || typeof data !== 'object') throw { status: 0, statusText: 'parse', parse: true };
                 return data;
             });
         },
+        /**
+         * get_app_setting upisuje uredaj u bazu portala (Android: registerMacAddressOnServer). Zove se kod
+         * svakog starta nakon playlist_information; ne blokira start i greska se samo logira.
+         */
         appSetting: function (mac) {
-            return Api.portalGet('/get_app_setting/' + encodeURIComponent(mac), 15000);
+            return Api.portalGet('/get_app_setting/' + Api.macPath(mac), 15000);
+        },
+        registerDevice: function (mac) {
+            if (!mac) return;
+            Api.appSetting(mac).then(function () { U.store.set('lbbe_registered', mac); }, function (e) { U.log('get_app_setting failed', e); });
         },
         /** Link za potvrdu uredaja (kod s portala, ne platformski pairCode). */
         pairingUrl: function (mac, code) {
