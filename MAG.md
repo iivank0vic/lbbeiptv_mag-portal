@@ -99,6 +99,9 @@ Za MAG domenu na CF-u isključi Bot Fight Mode / Browser Integrity Check i Rocke
   viewport videa se mjeri (`rectScale`), jer preglednici različito vraćaju koordinate uz `zoom`.
 - **Tipke:** keyCode + 1000 (Shift) + 2000 (Alt), kao Infomir SDK. Glasnoću, mute i power rješava portal.
 - **Izlaz:** `file:///home/web/services.html` (ugrađeni MAG izbornik).
+- **Lite način (MAG 2xx: 250/254/256…):** prepoznaje se po User-Agentu. Isključuje animacije, mutne sjene,
+  gradijente i povećavanje kartica, fokus crta `outline`-om (umjesto `box-shadow`) i odbacuje ponovljene
+  strelice brže od 170 ms, da se događaji ne gomilaju. Ručno: `?lite=1` / `?lite=0` na Portal URL-u.
 
 ## Što još treba provjeriti na pravom boxu
 

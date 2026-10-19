@@ -26,6 +26,51 @@
         try { return stb[name].apply(stb, Array.prototype.slice.call(arguments, 1)); } catch (e) { return undefined; }
     }
 
+    /* ---------------- lite nacin (MAG 2xx) ----------------
+     * MAG 250/254/256 crtaju softverski (spori CPU, stari WebKit): animacije, mutne sjene, gradijenti
+     * i box-shadow fokus prsten ponovno crtaju velike povrsine na svaki pomak fokusa. U lite nacinu
+     * to se iskljuci, a fokus se crta jeftinim outlineom. ?lite=1 / ?lite=0 za rucno ukljucivanje.
+     */
+    var LITE = (function () {
+        var m = String(window.location.search || '').match(/[?&]lite=([01])/);
+        if (m) return m[1] === '1';
+        var ua = navigator.userAgent || '';
+        return /MAG2\d\d|stbapp ver: 2/.test(ua);
+    })();
+    var LITE_CSS = [
+        'html.lite *, html.lite *:before, html.lite *:after { -webkit-transition: none !important; transition: none !important; -webkit-animation: none !important; animation: none !important; text-shadow: none !important; }',
+        // Fokus: outline umjesto box-shadow prstena.
+        'html.lite .focus { -webkit-box-shadow: none !important; box-shadow: none !important; outline: 4px solid #FFFFFF; }',
+        'html.lite .nav-item.focus, html.lite .cat-item.focus, html.lite .ch-row.focus, html.lite .ep-row.focus, html.lite .opt.focus { outline: 6px solid #FFFFFF; outline-offset: -6px; }',
+        'html.lite .row-card.focus, html.lite .grid-card.focus, html.lite .set-tile.focus { outline: none; }',
+        'html.lite .row-card.focus .pic, html.lite .grid-card.focus .pic, html.lite .set-tile.focus .tile { -webkit-box-shadow: none !important; box-shadow: none !important; outline: 6px solid #FFFFFF; }',
+        // Bez povecavanja kartica i mutnih sjena.
+        'html.lite .row-card .pic, html.lite .grid-card .pic, html.lite .set-tile .tile { -webkit-transform: none !important; transform: none !important; }',
+        'html.lite #rail.expanded, html.lite #info .poster, html.lite .dialog, html.lite #toast div { -webkit-box-shadow: none !important; box-shadow: none !important; }',
+        // Bez zaobljenja uz overflow:hidden (skupo rezanje) i bez velike pozadinske slike.
+        'html.lite .row-card .pic, html.lite .grid-card .pic, html.lite #info .poster, html.lite .dialog { border-radius: 0 !important; }',
+        'html.lite #info .backdrop { display: none !important; }',
+        // Gradijenti -> pune poluprozirne pozadine.
+        'html.lite #info .shade { background: rgba(11,14,17,.9) !important; }',
+        'html.lite #fs .osd-top { background: rgba(0,0,0,.7) !important; height: auto !important; padding-bottom: 36px !important; }',
+        'html.lite #fs .osd-bottom { background: rgba(0,0,0,.7) !important; padding-top: 36px !important; }'
+    ].join('\n');
+
+    function applyLite() {
+        if (!LITE) return;
+        document.documentElement.className += ' lite';
+        var st = document.createElement('style');
+        st.type = 'text/css';
+        st.appendChild(document.createTextNode(LITE_CSS));
+        (document.head || document.getElementsByTagName('head')[0]).appendChild(st);
+    }
+
+    /* Ponavljanje tipki (drzanje strelice): na sporom boxu dogadaji se gomilaju i navigacija
+     * kasni sekundama. Ponovljena ista navigacijska tipka brza od REPEAT_MS se odbacuje. */
+    var REPEAT_MS = LITE ? 170 : 60;
+    var lastKey = 0, lastKeyAt = 0;
+    var REPEATABLE = { left: 1, right: 1, up: 1, down: 1, chup: 1, chdown: 1 };
+
     /* ---------------- tipke ----------------
      * MAG salje Alt/Shift uz neke tipke (PLAY = Alt+R ...). Kod = keyCode + 1000 (Shift) + 2000 (Alt),
      * isto kao Infomir SDK.
@@ -276,8 +321,11 @@
             return k / f;
         },
 
+        lite: LITE,
+
         init: function (cb) {
             if (App.Engines) App.Engines.mag = MagEngine;
+            applyLite();
             if (onTv) {
                 call('SetTopWin', 0);          // web sloj iznad videa
                 call('EnableVKButton', false); // bez sistemske virtualne tipkovnice na tipki KB
@@ -313,7 +361,13 @@
                 if (e.altKey && ch === 'b') return 'blue';
                 if (e.keyCode === 32 && document.activeElement && document.activeElement.tagName !== 'INPUT') return 'playpause';
             }
-            return KEYS[k] || null;
+            var act = KEYS[k] || null;
+            if (act && REPEATABLE[act]) {
+                var now = new Date().getTime();
+                if (k === lastKey && now - lastKeyAt < REPEAT_MS) { e.preventDefault(); return null; }
+                lastKey = k; lastKeyAt = now;
+            }
+            return act;
         },
 
         getDeviceId: function () {
