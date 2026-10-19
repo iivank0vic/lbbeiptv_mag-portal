@@ -59,10 +59,74 @@
     function applyLite() {
         if (!LITE) return;
         document.documentElement.className += ' lite';
+        addCss(LITE_CSS);
+    }
+
+    /* ---------------- stari WebKit (MAG 250: QtWebKit 533) ----------------
+     * Nema modernog flexboxa (samo -webkit-box iz 2009.) ni inline SVG-a u HTML-u:
+     *  - <span> unutar -webkit-box ostaje inline pa ignorira width/height (logo, vrijeme u EPG-u)
+     *  - flex:1 element s dugim tekstom se ne skuplja nego gura red preko ruba -> width:0 trik
+     *  - <svg> iz innerHTML-a se ne crta -> ikone kao <img> sa SVG data URI-jem
+     */
+    var FORCE_OLD = /[?&]oldwk=1/.test(String(window.location.search || ''));
+    var OLD_FLEX = FORCE_OLD || (function () {
+        var st = document.createElement('div').style;
+        return !('flex' in st) && !('webkitFlex' in st) && !('msFlex' in st);
+    })();
+    var NO_INLINE_SVG = FORCE_OLD || (function () {
+        var d = document.createElement('div');
+        d.innerHTML = '<svg></svg>';
+        return !(d.firstChild && d.firstChild.namespaceURI === 'http://www.w3.org/2000/svg');
+    })();
+    var OLD_FLEX_CSS = [
+        'html.oldwk span { display: inline-block; }',
+        // flex:1 u vodoravnim redovima (rail-spacer je okomit i nije ovdje).
+        'html.oldwk .cat-item .nm, html.oldwk .hero-card, html.oldwk .hero-card .hero-text, html.oldwk .quick-tiles,' +
+        ' html.oldwk #panel-grid .grid-head .gh-text, html.oldwk .set-tile .tile .txt, html.oldwk #panel-live .ch-head .t-section,' +
+        ' html.oldwk .ch-row .nm, html.oldwk .pv-title .t-section, html.oldwk .epg-row .ti, html.oldwk #info .meta,' +
+        ' html.oldwk .ep-row .et, html.oldwk .osd-ch, html.oldwk .osd-prog .bar, html.oldwk .opt .ol, html.oldwk .acc-left,' +
+        ' html.oldwk .acc-head .t-section, html.oldwk .net-card, html.oldwk .kv .v, html.oldwk .speed > div, html.oldwk .s-field input { width: 0; }',
+        // Logo kanala bez object-fit: centriran unutar okvira, bez razvlacenja.
+        'html.oldwk .ch-row .logo { display: block; position: relative; }',
+        'html.oldwk .ch-row .logo img { position: absolute; left: 4px; top: 4px; right: 4px; bottom: 4px; margin: auto; width: auto; height: auto; max-width: 88px; max-height: 48px; }'
+    ].join('\n');
+
+    function addCss(css) {
         var st = document.createElement('style');
         st.type = 'text/css';
-        st.appendChild(document.createTextNode(LITE_CSS));
+        st.appendChild(document.createTextNode(css));
         (document.head || document.getElementsByTagName('head')[0]).appendChild(st);
+        return st;
+    }
+
+    var ICON_COLORS = { star: '#F5C542', 'catch': '#9AA7B2', past: '#2FA4F0' };
+    /** Ikone kao <img> (SVG data URI) + kopija svih "svg.ic" CSS pravila za "img.ic". */
+    function imgIcons() {
+        App.icon = function (name, cls) {
+            var d = (App.ICONS && App.ICONS[name]) || '';
+            var col = '#F2F5F7', stroke = false, parts = (cls || '').split(' ');
+            for (var i = 0; i < parts.length; i++) {
+                if (ICON_COLORS[parts[i]]) col = ICON_COLORS[parts[i]];
+                if (parts[i] === 'stroke') stroke = true;
+            }
+            var path = stroke ?
+                '<path fill="none" stroke="' + col + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="' + d + '"/>' :
+                '<path fill="' + col + '" d="' + d + '"/>';
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' + path + '</svg>';
+            return '<img class="ic' + (cls ? ' ' + cls : '') + '" alt="" src="data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '" />';
+        };
+        var extra = [];
+        try {
+            for (var s = 0; s < document.styleSheets.length; s++) {
+                var rules = document.styleSheets[s].cssRules || [];
+                for (var r = 0; r < rules.length; r++) {
+                    var sel = rules[r].selectorText;
+                    if (sel && sel.indexOf('svg.ic') >= 0) extra.push(sel.replace(/svg\.ic/g, 'img.ic') + ' { ' + rules[r].style.cssText + ' }');
+                }
+            }
+        } catch (e) { }
+        extra.push('img.ic { display: block; }');
+        addCss(extra.join('\n'));
     }
 
     /* Ponavljanje tipki (drzanje strelice): na sporom boxu dogadaji se gomilaju i navigacija
@@ -326,6 +390,8 @@
         init: function (cb) {
             if (App.Engines) App.Engines.mag = MagEngine;
             applyLite();
+            if (OLD_FLEX) { document.documentElement.className += ' oldwk'; addCss(OLD_FLEX_CSS); }
+            if (NO_INLINE_SVG) imgIcons();
             if (onTv) {
                 call('SetTopWin', 0);          // web sloj iznad videa
                 call('EnableVKButton', false); // bez sistemske virtualne tipkovnice na tipki KB
