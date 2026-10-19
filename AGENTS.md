@@ -44,7 +44,13 @@ TV web klijent LBBE IPTV playera. **Izvor istine za izgled i ponašanje je `APP.
   početak je u vremenu **servera** (iz tekstualnog `start` u EPG-u), ne u vremenu TV-a.
 - `timeshift.php` ne javlja trajanje: premotavanje = ponovno otvaranje s novim `start` (minutna preciznost).
 - Xtream `exp_date` null/0 = neograničeno. Neki serveri vraćaju objekt umjesto niza → `U.toArray`.
-- Ako Xtream API ne radi, isti URL se pokušava kao M3U; ako ni to ne uspije, prikazuje se izvorna greška.
+- **Vrsta playliste:** `App.Xtream.parse` prepoznaje Xtream (`username`/`password` u URL-u) i **XUI ONE**
+  (`/playlist/<user>/<pass>/m3u_plus` → server je sve prije `/playlist`, API isti `player_api.php`); ostalo je M3U.
+  Ako Xtream API ne radi, isti URL se pokušava kao M3U; ako ni to ne uspije, prikazuje se izvorna greška.
+  Ista pravila su u Android aplikaciji (`parser/PlaylistSource.kt`) — mijenjati oboje zajedno.
+- **M3U vrsta stavke** (`Lib.m3uKind`): `tvg-type` → `/movie/` `/series/` u URL-u → video datoteka (+ `S01E02` u imenu =
+  epizoda). Epizode se grupiraju po imenu (`Lib.parseEpisodeName`: `S01E02`, `Season 1 Episode 2`, `1x02`, `Episode 3`).
+  Ime stavke je iza PRVOG zareza izvan navodnika.
 - localStorage je mali na TV-u: pozicije nastavka su ograničene na 300 zapisa po vrsti. Playlista ide u
   IndexedDB (`js/cache.js`, samo jedna); bez IndexedDB-a ili u MAG lite načinu cache tiho ne radi.
 - **Pairing / ključ uređaja (API-SECURITY.md):** `Api.deviceKey()` je 64 hex znaka, nastaje jednom; nikad se
