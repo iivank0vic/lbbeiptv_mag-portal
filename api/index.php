@@ -19,8 +19,19 @@ $q = $_GET;
 unset($q['r']);
 $url = $BACKEND . str_replace('%3A', ':', $r) . ($q ? '?' . http_build_query($q) : '');
 
-$ip = isset($_SERVER['HTTP_CF_CONNECTING_IP']) ? $_SERVER['HTTP_CF_CONNECTING_IP'] : (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '');
-$headers = array('X-Forwarded-For: ' . $ip, 'X-Real-IP: ' . $ip, 'Accept: application/json');
+// Pravi IP boxa (portal moze biti iza Cloudflarea ili lokalnog nginxa/dockera).
+function box_ip() {
+    $c = array();
+    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) $c[] = $_SERVER['HTTP_CF_CONNECTING_IP'];
+    if (!empty($_SERVER['HTTP_X_REAL_IP'])) $c[] = $_SERVER['HTTP_X_REAL_IP'];
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) { $p = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']); $c[] = trim($p[0]); }
+    if (!empty($_SERVER['REMOTE_ADDR'])) $c[] = $_SERVER['REMOTE_ADDR'];
+    foreach ($c as $ip) if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+    return '';
+}
+$ip = box_ip();
+// Backend (api_mag.php) cita X-Mag-Client-Ip; CF-Connecting-IP bi tamo bio IP ovog servera.
+$headers = array('X-Mag-Client-Ip: ' . $ip, 'X-Forwarded-For: ' . $ip, 'X-Real-IP: ' . $ip, 'Accept: application/json');
 $ua = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'MAG';
 
 $status = 0; $body = false;

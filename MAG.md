@@ -40,7 +40,8 @@ Tablica `mag_devices` (napravi se sama pri prvom zahtjevu):
 - **Prvi box** koji se javi za MAC zapisuje se kao `pending`. Drugi token za isti MAC dobiva odgovor
   bez playliste, osim ako se pending nije javio `MAG_PENDING_DAYS` dana (default 7), npr. nakon
   tvorničkog reseta.
-- Kad MAC postoji u `play_lists` (aktiviran na webu), pending box se **veže**: MAC + token (+ serijski).
+- Prvi ispravan zahtjev upiše MAC u `play_lists` (`app_type = mag`, 14 dana probno, kao LG), pa se box
+  vidi u ACP-u i može mu se dodati lista. Box se time **veže**: MAC + token (+ serijski).
 - **Vezan MAC** s drugim tokenom ili serijskim brojem (skener) dobiva `mac_registered: false` bez `urls`.
 - **Reset** (novi box za isti MAC): `DELETE FROM mag_devices WHERE mac_address = '00:1A:79:...'`.
 - **Strože (preporučeno):** `define('MAG_REQUIRE_CODE', true);` u `config.php`. Box se tada veže tek kad
