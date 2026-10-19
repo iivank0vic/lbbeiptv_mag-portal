@@ -102,9 +102,13 @@ Za MAG domenu na CF-u isključi Bot Fight Mode / Browser Integrity Check i Rocke
 - **Lite način (MAG 2xx: 250/254/256…):** prepoznaje se po User-Agentu. Isključuje animacije, mutne sjene,
   gradijente i povećavanje kartica, fokus crta `outline`-om (umjesto `box-shadow`) i odbacuje ponovljene
   strelice brže od 170 ms, da se događaji ne gomilaju. Ručno: `?lite=1` / `?lite=0` na Portal URL-u.
-- **Stari WebKit (MAG 250, QtWebKit 533):** nema modernog flexboxa ni inline SVG-a. Kad se to otkrije,
-  `platform.js` dodaje klasu `oldwk` (spanovi `inline-block`, `width: 0` za `flex: 1` elemente, centrirani
-  logotipi) i crta ikone kao `<img>` sa SVG data URI-jem. Za test u pregledniku: `?oldwk=1`.
+- **Stari WebKit (MAG 250, QtWebKit 533):** nema modernog flexboxa ni SVG-a (ni inline ni kao `<img>`).
+  Kad se to otkrije, `platform.js` dodaje klasu `oldwk` (spanovi `inline-block`, `display: block; width: 0`
+  za `flex: 1` elemente, centrirani logotipi) i crta ikone kao PNG iz `mag/icons/`
+  (`python3 mag/make-icons.py . mag/icons` nakon promjene `js/icons.js`). Test u pregledniku: `?oldwk=1`.
+  Za vjeran test bez boxa: PhantomJS 1.9.8 (WebKit 534, isto bez flexa/Promise/bind).
+- **Viewport videa:** `SetViewport` je u **izlaznoj video rezoluciji** (`RDir('tvsystem')`: 1080i → 1920x1080,
+  720p → 1280x720, PAL → 720x576), ne u pikselima grafike.
 
 ## Što još treba provjeriti na pravom boxu
 

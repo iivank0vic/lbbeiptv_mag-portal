@@ -47,8 +47,8 @@
         // Bez povecavanja kartica i mutnih sjena.
         'html.lite .row-card .pic, html.lite .grid-card .pic, html.lite .set-tile .tile { -webkit-transform: none !important; transform: none !important; }',
         'html.lite #rail.expanded, html.lite #info .poster, html.lite .dialog, html.lite #toast div { -webkit-box-shadow: none !important; box-shadow: none !important; }',
-        // Bez zaobljenja uz overflow:hidden (skupo rezanje) i bez velike pozadinske slike.
-        'html.lite .row-card .pic, html.lite .grid-card .pic, html.lite #info .poster, html.lite .dialog { border-radius: 0 !important; }',
+        // Bez zaobljenih rubova: softverski se svaki crta s glađenjem (redovi liste, okviri, gumbi).
+        'html.lite *, html.lite *:before, html.lite *:after { border-radius: 0 !important; }',
         'html.lite #info .backdrop { display: none !important; }',
         // Gradijenti -> pune poluprozirne pozadine.
         'html.lite #info .shade { background: rgba(11,14,17,.9) !important; }',
@@ -56,8 +56,18 @@
         'html.lite #fs .osd-bottom { background: rgba(0,0,0,.7) !important; padding-top: 36px !important; }'
     ].join('\n');
 
+    /** TMDB posteri u lite nacinu u maloj velicini: MAG 250 sporo dekodira velike JPEG-ove. */
+    function smallImages() {
+        var orig = U.safeUrl;
+        U.safeUrl = function (s) {
+            var out = orig(s);
+            return out ? out.replace(/(image\.tmdb\.org\/t\/p\/)(original|w\d+(_and_h\d+_[a-z0-9]+)?)\//i, '$1w185/') : out;
+        };
+    }
+
     function applyLite() {
         if (!LITE) return;
+        smallImages();
         document.documentElement.className += ' lite';
         addCss(LITE_CSS);
     }
@@ -80,12 +90,14 @@
     })();
     var OLD_FLEX_CSS = [
         'html.oldwk span { display: inline-block; }',
-        // flex:1 u vodoravnim redovima (rail-spacer je okomit i nije ovdje).
-        'html.oldwk .cat-item .nm, html.oldwk .hero-card, html.oldwk .hero-card .hero-text, html.oldwk .quick-tiles,' +
-        ' html.oldwk #panel-grid .grid-head .gh-text, html.oldwk .set-tile .tile .txt, html.oldwk #panel-live .ch-head .t-section,' +
-        ' html.oldwk .ch-row .nm, html.oldwk .pv-title .t-section, html.oldwk .epg-row .ti, html.oldwk #info .meta,' +
-        ' html.oldwk .ep-row .et, html.oldwk .osd-ch, html.oldwk .osd-prog .bar, html.oldwk .opt .ol, html.oldwk .acc-left,' +
-        ' html.oldwk .acc-head .t-section, html.oldwk .net-card, html.oldwk .kv .v, html.oldwk .speed > div, html.oldwk .s-field input { width: 0; }',
+        // flex:1 u vodoravnim redovima (rail-spacer je okomit i nije ovdje): width:0, a obicni elementi i
+        // display:block (inline-block -webkit-box ne rasteze). .hero-card / .quick-tiles su i sami flex.
+        'html.oldwk .hero-card, html.oldwk .quick-tiles { width: 0; }',
+        'html.oldwk .cat-item .nm, html.oldwk .hero-card .hero-text, html.oldwk #panel-grid .grid-head .gh-text,' +
+        ' html.oldwk .set-tile .tile .txt, html.oldwk #panel-live .ch-head .t-section, html.oldwk .ch-row .nm,' +
+        ' html.oldwk .pv-title .t-section, html.oldwk .epg-row .ti, html.oldwk #info .meta, html.oldwk .ep-row .et,' +
+        ' html.oldwk .osd-ch, html.oldwk .osd-prog .bar, html.oldwk .opt .ol, html.oldwk .acc-left, html.oldwk .acc-head .t-section,' +
+        ' html.oldwk .net-card, html.oldwk .kv .v, html.oldwk .speed > div, html.oldwk .s-field input { display: block; width: 0; }',
         // Logo kanala bez object-fit: centriran unutar okvira, bez razvlacenja.
         'html.oldwk .ch-row .logo { display: block; position: relative; }',
         'html.oldwk .ch-row .logo img { position: absolute; left: 4px; top: 4px; right: 4px; bottom: 4px; margin: auto; width: auto; height: auto; max-width: 88px; max-height: 48px; }'
@@ -99,21 +111,15 @@
         return st;
     }
 
-    var ICON_COLORS = { star: '#F5C542', 'catch': '#9AA7B2', past: '#2FA4F0' };
-    /** Ikone kao <img> (SVG data URI) + kopija svih "svg.ic" CSS pravila za "img.ic". */
+    /** Ikone kao PNG (mag/icons/<ime>-<boja>.png, mag/make-icons.py) + kopija "svg.ic" CSS pravila
+     *  za "img.ic". MAG 250 ne prikazuje SVG ni kao <img>. */
+    var ICON_COLORS = { star: 1, 'catch': 1, past: 1 };
     function imgIcons() {
         App.icon = function (name, cls) {
-            var d = (App.ICONS && App.ICONS[name]) || '';
-            var col = '#F2F5F7', stroke = false, parts = (cls || '').split(' ');
-            for (var i = 0; i < parts.length; i++) {
-                if (ICON_COLORS[parts[i]]) col = ICON_COLORS[parts[i]];
-                if (parts[i] === 'stroke') stroke = true;
-            }
-            var path = stroke ?
-                '<path fill="none" stroke="' + col + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="' + d + '"/>' :
-                '<path fill="' + col + '" d="' + d + '"/>';
-            var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' + path + '</svg>';
-            return '<img class="ic' + (cls ? ' ' + cls : '') + '" alt="" src="data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '" />';
+            var col = 'w', parts = (cls || '').split(' ');
+            for (var i = 0; i < parts.length; i++) if (ICON_COLORS[parts[i]]) col = parts[i];
+            if (!App.ICONS || !App.ICONS[name]) return '';
+            return '<img class="ic' + (cls ? ' ' + cls : '') + '" alt="" src="mag/icons/' + name + '-' + col + '.png" />';
         };
         var extra = [];
         try {
@@ -234,6 +240,22 @@
         return out;
     }
 
+    /** Izlazna video rezolucija [sirina, visina] (tvsystem: 1080i-50, 720p-60, PAL, NTSC ...); bez podatka 1920x1080. */
+    var _out = null;
+    function outSize() {
+        if (_out) return _out;
+        var tv = String(call('RDir', 'tvsystem') || call('RDir', 'getenv tvsystem') || '');
+        var m = tv.match(/(\d{3,4})[ip]/i), h = m ? parseInt(m[1], 10) : 0;
+        var k = App.Platform.scale || 1;
+        if (!onTv) _out = [1920 * k, 1080 * k];                         // preglednik: pikseli prozora
+        else if (h >= 1000 || /2160|4k|uhd/i.test(tv)) _out = [1920, 1080];
+        else if (h >= 700) _out = [1280, 720];
+        else if (/ntsc|480/i.test(tv)) _out = [720, 480];
+        else if (h > 0 || /pal|576/i.test(tv)) _out = [720, 576];
+        else _out = [1920, 1080];
+        return _out;
+    }
+
     /* ======================= MAG player (gSTB) ======================= */
     // Aspect: niski nibble = omjer izvora (0 auto, 2 16:9), visoki = nacin (1 letterbox, 4 povecaj, 5 optimalno).
     var ASPECT = { fit: 0x10, zoom: 0x40, auto: 0x50, stretch: 0x02 };
@@ -319,10 +341,10 @@
         applyRect: function () {
             var r = this.rect;
             if (r[2] >= 1900 && r[3] >= 1060) { call('SetPIG', 1, -1, -1, -1); return; }   // puni ekran
-            // Koordinate dolaze iz getBoundingClientRect; MAG viewport je u pikselima grafike.
+            // Koordinate dolaze iz getBoundingClientRect; MAG viewport je u izlaznoj video rezoluciji.
             var k = App.Platform.rectScale();
             if (r[2] <= 0 || r[3] <= 0) { call('SetViewport', 1, 1, 0, 0); return; }
-            call('SetViewport', Math.round(r[2] * k), Math.round(r[3] * k), Math.round(r[0] * k), Math.round(r[1] * k));
+            call('SetViewport', Math.round(r[2] * k[0]), Math.round(r[3] * k[1]), Math.round(r[0] * k[0]), Math.round(r[1] * k[1]));
         },
         setRatio: function (mode) { call('SetAspect', ASPECT.hasOwnProperty(mode) ? ASPECT[mode] : ASPECT.fit); },
         /** MAG vraca liste kao JS literal ([{pid:1,lang:['eng','']}]), ne strogi JSON. */
@@ -376,16 +398,15 @@
          * preglednici vec vracaju skalirane koordinate (Chromium), a neki ne (stari WebKit) —
          * zato se mjeri na #app (sirok 1920 CSS px), a ne pretpostavlja.
          */
+        /** [kx, ky]: od koordinata iz getBoundingClientRect do koordinata za MAG SetViewport. */
         rectScale: function () {
-            var k = App.Platform.scale;
-            if (k === 1) return 1;
+            // MAG SetViewport radi u IZLAZNOJ video rezoluciji (1080i/720p/576i), ne u pikselima grafike.
+            var out = outSize();
             var el = document.getElementById('app');
             var w = el ? el.getBoundingClientRect().width : 0;
-            var f = w > 0 ? w / 1920 : 1;
-            return k / f;
+            var f = w > 0 ? w / 1920 : 1;   // getBoundingClientRect uz zoom: neki vec skalirano, neki ne
+            return [out[0] / 1920 / f, out[1] / 1080 / f];
         },
-
-        lite: LITE,
 
         init: function (cb) {
             if (App.Engines) App.Engines.mag = MagEngine;
