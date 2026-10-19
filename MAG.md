@@ -101,7 +101,9 @@ Za MAG domenu na CF-u isključi Bot Fight Mode / Browser Integrity Check i Rocke
 - **Izlaz:** `file:///home/web/services.html` (ugrađeni MAG izbornik).
 - **Lite način (MAG 2xx: 250/254/256…):** prepoznaje se po User-Agentu. Isključuje animacije, mutne sjene,
   gradijente i povećavanje kartica, fokus crta `outline`-om (umjesto `box-shadow`) i odbacuje ponovljene
-  strelice brže od 170 ms, da se događaji ne gomilaju. Ručno: `?lite=1` / `?lite=0` na Portal URL-u.
+  strelice brže od 170 ms, da se događaji ne gomilaju. Bez zaobljenih rubova, OSD neproziran, TMDB posteri
+  u `w185`, a QR (Account/Playlists) s 3 px po modulu, zapamćen i napravljen unaprijed kad daljinski miruje.
+  Ručno: `?lite=1` / `?lite=0` na Portal URL-u.
 - **Stari WebKit (MAG 250, QtWebKit 533):** nema modernog flexboxa ni SVG-a (ni inline ni kao `<img>`).
   Kad se to otkrije, `platform.js` dodaje klasu `oldwk` (spanovi `inline-block`, `display: block; width: 0`
   za `flex: 1` elemente, centrirani logotipi) i crta ikone kao PNG iz `mag/icons/`

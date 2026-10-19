@@ -52,8 +52,9 @@
         'html.lite #info .backdrop { display: none !important; }',
         // Gradijenti -> pune poluprozirne pozadine.
         'html.lite #info .shade { background: rgba(11,14,17,.9) !important; }',
-        'html.lite #fs .osd-top { background: rgba(0,0,0,.7) !important; height: auto !important; padding-bottom: 36px !important; }',
-        'html.lite #fs .osd-bottom { background: rgba(0,0,0,.7) !important; padding-top: 36px !important; }'
+        // OSD neprozirno: mijesanje poluprozirne trake preko videa je softverski skupo (prikaz/skrivanje OSD-a).
+        'html.lite #fs .osd-top { background: #0B0E11 !important; height: auto !important; padding-bottom: 36px !important; }',
+        'html.lite #fs .osd-bottom { background: #0B0E11 !important; padding-top: 36px !important; }'
     ].join('\n');
 
     /** TMDB posteri u lite nacinu u maloj velicini: MAG 250 sporo dekodira velike JPEG-ove. */
@@ -65,9 +66,35 @@
         };
     }
 
+    /**
+     * QR (Account, Playlists, aktivacija): qrcode.js ga kodira u GIF u JavaScriptu; s 8 px po modulu to
+     * na MAG 250 traje sekundama. Lite: 3 px po modulu (CSS ga i dalje prikazuje 300x300), gotovi kodovi
+     * se pamte, a Account/Playlists QR se napravi unaprijed kad daljinski miruje.
+     */
+    function fastQr() {
+        var cache = {};
+        U.qrDataUrl = function (text) {
+            if (cache.hasOwnProperty(text)) return cache[text];
+            var url = '';
+            try { var qr = window.qrcode(0, 'M'); qr.addData(text); qr.make(); url = qr.createDataURL(3, 0); } catch (e) { }
+            if (url) cache[text] = url;
+            return url;
+        };
+        var todo = null, tries = 0;
+        var timer = setInterval(function () {
+            if (++tries > 60) { clearInterval(timer); return; }
+            if (!App.mac || !App.Api) return;
+            if (!todo) todo = [App.Api.withMac(App.Api.ACTIVATE_URL, App.mac), App.Api.withMac(App.Api.MYLIST_URL, App.mac)];
+            if (new Date().getTime() - lastAnyKey < 4000) return;   // ne usred navigacije
+            U.qrDataUrl(todo.shift());
+            if (!todo.length) clearInterval(timer);
+        }, 5000);
+    }
+
     function applyLite() {
         if (!LITE) return;
         smallImages();
+        fastQr();
         document.documentElement.className += ' lite';
         addCss(LITE_CSS);
     }
@@ -138,7 +165,7 @@
     /* Ponavljanje tipki (drzanje strelice): na sporom boxu dogadaji se gomilaju i navigacija
      * kasni sekundama. Ponovljena ista navigacijska tipka brza od REPEAT_MS se odbacuje. */
     var REPEAT_MS = LITE ? 170 : 60;
-    var lastKey = 0, lastKeyAt = 0;
+    var lastKey = 0, lastKeyAt = 0, lastAnyKey = 0;
     var REPEATABLE = { left: 1, right: 1, up: 1, down: 1, chup: 1, chdown: 1 };
 
     /* ---------------- tipke ----------------
@@ -430,6 +457,7 @@
 
         keyAction: function (e) {
             var k = e.keyCode || e.which;
+            lastAnyKey = new Date().getTime();
             if (e.shiftKey) k += 1000;
             if (e.altKey) k += 2000;
             if (k >= 48 && k <= 57) return String(k - 48);
