@@ -14,7 +14,7 @@ VER=$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M)
 
 rm -rf "$DIST"
 mkdir -p "$DIST/mag"
-cp -r "$ROOT/css" "$ROOT/fonts" "$ROOT/images" "$ROOT/js" "$DIST/"
+cp -r "$ROOT/api" "$ROOT/css" "$ROOT/fonts" "$ROOT/images" "$ROOT/js" "$DIST/"
 cp "$ROOT/mag/polyfills.js" "$DIST/mag/"
 cp "$ROOT/index.html" "$ROOT/icon.png" "$DIST/"
 

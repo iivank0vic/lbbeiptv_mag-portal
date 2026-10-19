@@ -12,9 +12,10 @@
     var stb = window.gSTB || null;
     var onTv = !!stb;
 
-    // Backend ide kroz nginx istog hosta (/portal/api/ -> app-api-v4.../tv_mag): nema CORS-a ni
-    // modernog TLS-a koji MAG 250/254 ne zna. Za razvoj u pregledniku: ?api=https://...
-    var PANEL = 'api';
+    // Backend ide kroz proxy na istom hostu (api/index.php ili nginx /portal/api/ -> app-api-v4.../tv_mag):
+    // nema CORS-a ni modernog TLS-a koji MAG 250/254 ne zna. Query oblik (?r=) radi na svakom PHP
+    // serveru bez rewrite pravila. Za razvoj u pregledniku: ?api=https://...
+    var PANEL = 'api/?r=';
     try {
         var m = String(window.location.search || '').match(/[?&]api=([^&]+)/);
         if (m) PANEL = decodeURIComponent(m[1]).replace(/\/+$/, '');

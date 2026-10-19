@@ -15,50 +15,49 @@ Ovaj portal radi drugačije:
    Token je nasumičan (128 bit), nastaje pri prvom pokretanju i ostaje spremljen na boxu
    (`gSTB.SaveUserData` + `localStorage`).
 2. Neaktiviran box na ekranu prikazuje MAC i **kod za aktivaciju** (6 znakova, izveden iz tokena).
-   Kod nije nigdje drugdje vidljiv. Aktivacija na webu traži MAC **i** kod.
+   Kod nije nigdje drugdje vidljiv (uz `MAG_REQUIRE_CODE` aktivacija na webu traži MAC **i** kod).
 3. Nakon aktivacije backend MAC veže uz serijski broj i token. Zahtjev s istim MAC-om, a drugim
    tokenom ili serijskim brojem (skener), dobiva odgovor kao za neregistriran uređaj.
 4. Streamovi idu preko običnog Xtream `username/password` iz playliste, ne preko XUI MAG uređaja.
    Zato nginx više ne mora izlagati `portal.php` / `load.php`.
 
-## Ugovor s backendom (`/tv_mag`) — TREBA DODATI NA BACKENDU
-
-Isti endpointi kao `tv_lg` / `tv_samsung`, s dodatnim query parametrima:
+## Backend (`lbbeiptv_api-v4-app` → `api_mag.php`)
 
 ```
 GET /tv_mag/playlist_information/<MAC>?sn=<serijski>&dt=<token>&pc=<kod>&model=<model>
-GET /tv_mag/get_app_setting/<MAC>?sn=...&dt=...&pc=...&model=...
 ```
 
 | Param | Opis |
 |---|---|
-| `MAC` | `00:1A:79:XX:XX:XX` (velika slova) |
+| `MAC` | `00:1A:79:XX:XX:XX` |
 | `sn` | serijski broj boxa (`gSTB.GetDeviceSerialNumber()`), može biti prazan na starom firmwareu |
 | `dt` | token uređaja, 32 hex znaka |
 | `pc` | kod za aktivaciju koji box upravo prikazuje (6 znakova, `A-Z` bez `I`/`O` + `2-9`) |
 | `model` | npr. `MAG254`, samo informativno |
 
-Pravila koja backend treba provoditi:
+Tablica `mag_devices` (napravi se sama pri prvom zahtjevu):
 
-- **MAC nije vezan:** spremi (ili osvježi) zapis "na čekanju" `{mac, sn, dt, pc}` i vrati
-  `mac_registered: false`. Ne vraćaj `urls`.
-- **Aktivacija na webu** (`/activate?mac=…&code=…`, QR to već šalje): uspije samo ako se `code`
-  podudara s `pc` iz zapisa na čekanju za taj MAC. Tada MAC trajno veži uz taj `dt` (i `sn`).
-- **MAC vezan:** ako se `dt` (i `sn`, kad je spremljen) podudara, vrati normalan odgovor
-  (`mac_registered`, `urls`, `expire_date`, `is_trial`, `languages`). Ako se ne podudara, vrati
-  `mac_registered: false` bez `urls` (i ne mijenjaj vezu).
-- **Reset** (novi box / tvornički reset briše token): korisnik u panelu odveže uređaj pa ga ponovno
-  aktivira s novim kodom.
-- Ograniči broj zahtjeva po IP-u za `/tv_mag/*` (nginx već šalje pravi IP u `X-Forwarded-For`).
+- **Prvi box** koji se javi za MAC zapisuje se kao `pending`. Drugi token za isti MAC dobiva odgovor
+  bez playliste, osim ako se pending nije javio `MAG_PENDING_DAYS` dana (default 7), npr. nakon
+  tvorničkog reseta.
+- Kad MAC postoji u `play_lists` (aktiviran na webu), pending box se **veže**: MAC + token (+ serijski).
+- **Vezan MAC** s drugim tokenom ili serijskim brojem (skener) dobiva `mac_registered: false` bez `urls`.
+- **Reset** (novi box za isti MAC): `DELETE FROM mag_devices WHERE mac_address = '00:1A:79:...'`.
+- **Strože (preporučeno):** `define('MAG_REQUIRE_CODE', true);` u `config.php`. Box se tada veže tek kad
+  aktivacijska stranica (`/activate?mac=…&code=…`) potvrdi kod:
+  `UPDATE mag_devices SET code_verified = 1 WHERE mac_address = ? AND pair_code = ? AND status = 'pending'`.
+  Bez toga (default) vrijedi "prvi box koji se javio".
 
-## Nginx (xui-nginx)
+## Proxy do backenda
 
-`conf/snippets/xu-mag-portal.conf`:
+Portal zove `api/?r=/playlist_information/<MAC>&sn=…` na **istom hostu** (MAG 250/254 nema CORS ni moderan
+TLS problem). Dvije izvedbe, obje rade bez dodatne konfiguracije:
 
-- `/portal/` → statika iz `/home/xtreamcodes/iptv_xtream_codes/zMagPortal/portal/` (ovdje ide `dist/`)
-- `/portal/api/` → proxy na `https://app-api-v4.lbbeiptv.com/tv_mag/`. Isti host za box znači da
-  nema CORS-a i da box ne treba moderan TLS (MAG 250/254 ga ne zna).
-- `portal.php`, `/server/load.php` i `/stalker_portal/*` su ugašeni (404).
+- **Bilo koji PHP server (FTP deploy):** `api/index.php` prosljeđuje na
+  `https://app-api-v4.lbbeiptv.com/tv_mag` (treba curl ili `allow_url_fopen`). Propušta samo
+  `playlist_information` / `get_app_setting` s MAC adresom.
+- **xui-nginx:** `conf/snippets/xu-mag-portal.conf` — `/portal/api/` ide direktno proxyjem na backend;
+  `portal.php`, `/server/load.php` i `/stalker_portal/*` su ugašeni (404).
 
 ## Build i deploy
 
@@ -69,8 +68,9 @@ mag/build.sh root@server:/opt/xui/iptv_xtream_codes/zMagPortal/portal  # build +
 ```
 
 Build samo kopira datoteke u `dist/` i dodaje `?v=` (MAG kešira portal) — `-webkit-` prefiksi za stare
-MAG-ove su već u `css/app.css`. Zato se može i bez builda: uploadaj sadržaj repoa (bez `.git`, `tools`,
-`*.md`) na bilo koji web server.
+MAG-ove su već u `css/app.css`. Zato se može i bez builda: uploadaj `index.html`, `icon.png`, `api/`,
+`css/`, `fonts/`, `images/`, `js/` i `mag/polyfills.js` na bilo koji PHP server (to radi i
+`.github/workflows/deploy.yml` na svaki push).
 
 ## Postavljanje na boxu
 

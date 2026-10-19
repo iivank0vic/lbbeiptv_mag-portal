@@ -20,7 +20,8 @@
          */
         authQuery: function () {
             var q = App.Platform.authQuery ? App.Platform.authQuery() : '';
-            return q ? '?' + q : '';
+            // panelUrl moze vec imati query (MAG PHP proxy: api/?r=...), onda ide '&'.
+            return q ? (Api.panel().indexOf('?') >= 0 ? '&' : '?') + q : '';
         },
         playlistInformation: function (mac) {
             return U.getJSON(Api.panel() + '/playlist_information/' + encodeURIComponent(mac) + Api.authQuery(), 20000).then(function (data) {
