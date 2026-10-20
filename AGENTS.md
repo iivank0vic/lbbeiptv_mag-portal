@@ -51,6 +51,9 @@ TV web klijent LBBE IPTV playera. **Izvor istine za izgled i ponašanje je `APP.
 - **M3U vrsta stavke** (`Lib.m3uKind`): `tvg-type` → `/movie/` `/series/` u URL-u → video datoteka (+ `S01E02` u imenu =
   epizoda). Epizode se grupiraju po imenu (`Lib.parseEpisodeName`: `S01E02`, `Season 1 Episode 2`, `1x02`, `Episode 3`).
   Ime stavke je iza PRVOG zareza izvan navodnika.
+- **M3U EPG** (`js/epg.js`): XMLTV iz `url-tvg` / `x-tvg-url` (ili `xmltv.php` za Xtream / XUI link), `.gz` preko
+  `js/lib/pako_inflate.min.js` (MIT). Parsira se regexom u komadima (~60 ms, UI ne zastaje), samo kanali iz liste i
+  −4 h … +30 h; kopija u IndexedDB (`epg` store, 12 h). U MAG lite načinu isključeno. Isto kao Android `epg/M3uEpg.kt`.
 - localStorage je mali na TV-u: pozicije nastavka su ograničene na 300 zapisa po vrsti. Playlista ide u
   IndexedDB (`js/cache.js`, samo jedna); bez IndexedDB-a ili u MAG lite načinu cache tiho ne radi.
 - **Pairing / ključ uređaja (API-SECURITY.md):** `Api.deviceKey()` je 64 hex znaka, nastaje jednom; nikad se

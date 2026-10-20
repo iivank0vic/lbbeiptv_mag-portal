@@ -169,6 +169,8 @@
         setTimeout(function () {
             A.Loader.hide();
             A.Shell.start();
+            // EPG za M3U (XMLTV) u pozadini, kad je pocetni ekran vec nacrtan.
+            if (A.XmlEpg) setTimeout(function () { A.XmlEpg.load(); }, 1500);
             if (fromCache) A.toast(t('saved_data_used', 'Using saved data from') + ' ' + U.fmtDate(new Date(A.Lib.cacheTime || U.now())), 3500);
         }, 50);
     };

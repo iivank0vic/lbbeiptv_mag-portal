@@ -42,7 +42,8 @@
 
         reset: function () {
             Lib.live = emptyKind(); Lib.vod = emptyKind(); Lib.series = emptyKind();
-            Lib.userInfo = null; Lib.serverInfo = null;
+            Lib.userInfo = null; Lib.serverInfo = null; Lib.epgUrls = [];
+            if (App.XmlEpg) App.XmlEpg.reset();
         },
 
         /* ---------------- ucitavanje ---------------- */
@@ -165,7 +166,7 @@
                 return { cats: K.cats.map(function (c) { return { id: c.id, name: c.name }; }), items: K.items };
             };
             App.Cache.put({
-                key: Lib.key, url: Lib.url, type: Lib.type, savedAt: U.now(),
+                key: Lib.key, url: Lib.url, type: Lib.type, savedAt: U.now(), epgUrls: Lib.epgUrls,
                 userInfo: Lib.userInfo, serverInfo: Lib.serverInfo,
                 live: strip(Lib.live), vod: strip(Lib.vod), series: strip(Lib.series)
             });
@@ -180,6 +181,7 @@
                 Lib.url = url; Lib.key = key; Lib.type = d.type;
                 Lib.userInfo = d.userInfo || null; Lib.serverInfo = d.serverInfo || null;
                 Lib.cacheTime = d.savedAt;
+                Lib.epgUrls = d.epgUrls || [];
                 if (Lib.type === 'xtream') { var acc = App.Xtream.parse(url); if (acc) App.Xtream.set(acc); }
                 ['live', 'vod', 'series'].forEach(function (kind) { Lib.indexPlain(kind, d[kind].cats.map(function (c) { return { category_id: c.id, category_name: c.name }; }), d[kind].items || []); });
                 return Lib.live.items.length + Lib.vod.items.length + Lib.series.items.length > 0;
@@ -248,6 +250,7 @@
         /* ---------------- M3U ---------------- */
         parseM3u: function (text) {
             var lines = text.split(/\r?\n/);
+            Lib.epgUrls = Lib.epgUrls || [];
             var live = [], vod = [], seriesEps = [];
             var cats = { live: {}, vod: {}, series: {} };
             var catList = { live: [], vod: [], series: [] };
@@ -257,6 +260,14 @@
                 if (!line) continue;
                 if (line.indexOf('#EXTINF') === 0) {
                     cur = parseExtinf(line);
+                    continue;
+                }
+                if (line.indexOf('#EXTM3U') === 0 || line.indexOf('\ufeff#EXTM3U') === 0) {
+                    // EPG adrese: url-tvg="a.xml.gz,b.xml" / x-tvg-url / tvg-url.
+                    var hre = /\b(?:url-tvg|x-tvg-url|tvg-url)="([^"]*)"/gi, hm;
+                    while ((hm = hre.exec(line)) !== null) {
+                        hm[1].split(',').forEach(function (u) { u = u.replace(/^\s+|\s+$/g, ''); if (u && Lib.epgUrls.indexOf(u) < 0) Lib.epgUrls.push(u); });
+                    }
                     continue;
                 }
                 if (line.charAt(0) === '#') {

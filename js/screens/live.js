@@ -42,6 +42,12 @@
             });
             layer.zones.channels = list;
             App.Player.on(function (ev) { if (ev === 'state' || ev === 'media' || ev === 'reconnect') Live.paintStatus(); });
+            // XMLTV (M3U) je stigao: osvjezi EPG fokusiranog kanala i OSD.
+            if (App.XmlEpg) App.XmlEpg.onChange(function () {
+                var ch = Live.mode === 'channels' ? Live.channels[list.index] : null;
+                if (ch) Live.loadEpg(ch);
+                if (App.Fullscreen && App.Fullscreen.mode === 'live' && App.Fullscreen.refreshEpg) App.Fullscreen.refreshEpg();
+            });
         },
 
         /* ---------------- kategorije / kanali ---------------- */
@@ -177,7 +183,12 @@
             U.byId('pv-help').textContent = parts.join('   ·   ');
         },
         loadEpg: U.debounce(function (ch) {
-            if (App.Lib.type !== 'xtream') { Live.paintEpg(ch, null); return; }
+            if (App.Lib.type !== 'xtream') {
+                // M3U: XMLTV (js/epg.js); dok se ucitava, ostaje prazno i iscrta se kad stigne.
+                var xl = App.XmlEpg ? App.XmlEpg.forChannel(ch) : [];
+                Live.paintEpg(ch, xl === null ? [] : xl, xl === null);
+                return;
+            }
             var c = epgCache[ch.id];
             if (c && U.now() - c.t < EPG_TTL) { Live.paintEpg(ch, c.list); return; }
             App.Xtream.shortEpg(ch.id, 6).then(function (listE) {
@@ -187,19 +198,22 @@
         }, 600),
         /** EPG za OSD (koristi isti cache). */
         epgFor: function (ch, cb) {
-            if (!ch || App.Lib.type !== 'xtream') { cb([]); return; }
+            if (ch && App.Lib.type !== 'xtream') { cb((App.XmlEpg && App.XmlEpg.forChannel(ch)) || []); return; }
+            if (!ch) { cb([]); return; }
             var c = epgCache[ch.id];
             if (c && U.now() - c.t < EPG_TTL) { cb(c.list); return; }
             App.Xtream.shortEpg(ch.id, 6).then(function (l) { epgCache[ch.id] = { t: U.now(), list: l }; cb(l); }, function () { cb([]); });
         },
-        paintEpg: function (ch, epg) {
+        paintEpg: function (ch, epg, pending) {
             var cur = Live.mode === 'channels' ? Live.channels[list.index] : null;
             if (!cur || cur.id !== ch.id) return;
             var el = U.byId('pv-epg');
+            if (!el) return;
             var now = U.now();
             var items = (epg || []).filter(function (p) { return p.end > now; }).slice(0, 4);
             if (!items.length) {
-                el.innerHTML = '<div class="epg-row"><span class="ti" style="color:#9AA7B2">' + U.esc(t('no_epg_data')) + '</span></div>';
+                el.innerHTML = '<div class="epg-row"><span class="ti" style="color:#9AA7B2">' + U.esc(pending ? t('loading_epg', 'Loading TV guide\u2026') : t('no_epg_data')) + '</span></div>';
+                var de = U.byId('pv-desc'); if (de) de.textContent = '';
                 return;
             }
             var html = '';
