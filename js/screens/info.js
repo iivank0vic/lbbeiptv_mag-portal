@@ -109,7 +109,7 @@
         useM3uSeasons: function (it) {
             var keys = Object.keys(it.m3uSeasons).sort(function (a, b) { return a - b; });
             I.seasons = keys.map(function (k) {
-                var list = it.m3uSeasons[k].map(function (e) { return { id: e.id, num: e.num, title: e.title, ext: e.ext, url: e.url, season: parseInt(k, 10) }; });
+                var list = it.m3uSeasons[k].map(function (e) { return { id: e.id, num: e.num, title: e.title, ext: e.ext, url: e.url, image: U.safeUrl(e.icon || '') || '', season: parseInt(k, 10) }; });
                 list.sort(function (a, b) { return a.num - b.num; });
                 return { num: parseInt(k, 10), episodes: list };
             });

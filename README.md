@@ -25,6 +25,9 @@ Promjenu u zajedničkom kodu napravi u jednom repozitoriju i prenesi u ostale:
   redovi: najnoviji filmovi, najnovije serije, omiljeni kanali.
 - **Live TV** — traka | kategorije | kanali | pregled + EPG. OK = pregled, OK na kanal koji svira = puni ekran.
   DESNO na kanalu sa sat ikonom = catch-up (arhiva). Žuta = favorit, crvena/MENU = opcije, brojevi = skok na kanal.
+- **Playliste** — Xtream Codes (`get.php?username=&password=`), XUI ONE (`/playlist/<user>/<pass>/m3u_plus`, preko
+  `player_api.php`) i M3U (`tvg-type` live / movie / series, serije iz `S01E02` u imenu, EPG iz XMLTV `url-tvg`).
+  Ako API ne radi, link se skida kao M3U.
 - **Učitavanje** — koraci s napretkom (Xtream 7 koraka, M3U s MB / MB/s), nakon 15 s "Taking too long? Options";
   greške s jasnim razlogom i akcijama (Retry, Continue with saved data, Clear cache, Choose playlist, More options).
   Kopija zadnje playliste u IndexedDB-u (ne u MAG lite načinu).
@@ -59,7 +62,8 @@ js/util.js            HTTP (XHR), pohrana, formatiranje
 js/i18n.js            prijevodi sa servera + engleski fallback
 js/api.js             backend (playlist_information) i Xtream API
 js/library.js         postavke, učitavanje playliste (Xtream / M3U), favoriti, recent, nastavak
-js/cache.js           kopija playliste u IndexedDB-u ("Continue with saved data")
+js/cache.js           kopija playliste i EPG-a u IndexedDB-u ("Continue with saved data")
+js/epg.js             EPG za M3U (XMLTV, .gz preko js/lib/pako_inflate.min.js)
 js/nav.js             fokus i tipke (slojevi + zone)
 js/widgets.js         virtualna lista, virtualni grid, red kartica, grupa gumba
 js/dialogs.js         dijalozi (izbor, višestruki izbor, PIN, potvrda)

@@ -98,6 +98,11 @@
             F.paintLiveEpg();
             F.paintState();
         },
+        refreshEpg: function () {
+            var ch = App.Live.playingChannel();
+            if (!ch) return;
+            App.Live.epgFor(ch, function (list) { if (F.mode === 'live' && App.Live.playingId === ch.id) { F.epg = list; F.paintLiveEpg(); } });
+        },
         paintLiveEpg: function () {
             var now = U.now();
             var cur = null, next = null;

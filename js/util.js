@@ -118,6 +118,7 @@ var U = App.U = {
             var done = false;
             xhr.open(opts.method || 'GET', opts.url, true);
             xhr.timeout = opts.timeout || 30000;
+            if (opts.type === 'arraybuffer') { try { xhr.responseType = 'arraybuffer'; } catch (e) { } }
             if (opts.headers) {
                 for (var k in opts.headers) if (opts.headers.hasOwnProperty(k)) xhr.setRequestHeader(k, opts.headers[k]);
             }
@@ -125,6 +126,7 @@ var U = App.U = {
                 if (xhr.readyState !== 4 || done) return;
                 done = true;
                 if (xhr.status >= 200 && xhr.status < 300) {
+                    if (opts.type === 'arraybuffer') { resolve(xhr.response); return; }
                     var txt = xhr.responseText;
                     if (opts.type === 'json') {
                         var data = U.parseJSON(txt);
@@ -139,7 +141,7 @@ var U = App.U = {
                 } else {
                     // Tijelo greske treba (npr. 403 {"error":"pairing_required","pairing_code":...}).
                     var body = '';
-                    try { body = xhr.responseText || ''; } catch (e) { }
+                    try { body = opts.type === 'arraybuffer' ? '' : (xhr.responseText || ''); } catch (e) { }
                     reject({ status: xhr.status, statusText: xhr.statusText || '', body: body, data: U.parseJSON(body) });
                 }
             };

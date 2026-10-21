@@ -71,15 +71,26 @@
             return null;
         },
 
+        /** MAC u putanji s doslovnim ':' (kao Android Retrofit i stari LG klijent), ne %3A. */
+        macPath: function (mac) { return encodeURIComponent(mac || '').replace(/%3A/gi, ':'); },
+
         /** {mac_registered, urls[], expire_date, is_trial, languages[]} */
         playlistInformation: function (mac) {
-            return Api.portalGet('/playlist_information/' + encodeURIComponent(mac), 20000).then(function (data) {
+            return Api.portalGet('/playlist_information/' + Api.macPath(mac), 20000).then(function (data) {
                 if (!data || typeof data !== 'object') throw { status: 0, statusText: 'parse', parse: true };
                 return data;
             });
         },
+        /**
+         * get_app_setting upisuje uredaj u bazu portala (Android: registerMacAddressOnServer). Zove se kod
+         * svakog starta nakon playlist_information; ne blokira start i greska se samo logira.
+         */
         appSetting: function (mac) {
-            return Api.portalGet('/get_app_setting/' + encodeURIComponent(mac), 15000);
+            return Api.portalGet('/get_app_setting/' + Api.macPath(mac), 15000);
+        },
+        registerDevice: function (mac) {
+            if (!mac) return;
+            Api.appSetting(mac).then(function () { U.store.set('lbbe_registered', mac); }, function (e) { U.log('get_app_setting failed', e); });
         },
         /** Link za potvrdu uredaja (kod s portala, ne platformski pairCode). */
         pairingUrl: function (mac, code) {
@@ -116,30 +127,34 @@
     App.randomHex = randomHex;
 
     /**
-     * Xtream racun iz URL-a playliste. Prepoznaje get.php / player_api.php s username i password
-     * parametrima (i `/username/password` oblik nije podrzan kao Xtream — to je obican M3U).
+     * Xtream racun iz URL-a playliste:
+     *  - Xtream Codes: get.php / player_api.php (ili bilo koja putanja) s username i password parametrima;
+     *  - XUI ONE: /playlist/<user>/<pass>[/m3u_plus | m3u | ...] (server = sve prije /playlist).
+     * Ostalo je obican M3U. Ako API ne radi, isti URL se skida kao M3U (Lib.load).
      */
     var Xtream = App.Xtream = {
         server: '', username: '', password: '',
 
         parse: function (url) {
             if (!url) return null;
-            var q = url.split('?');
+            url = String(url).replace(/^\s+|\s+$/g, '');
+            var dec = function (v) { try { return decodeURIComponent(v); } catch (e) { return v; } };
+            var x = url.match(/^(https?:\/\/[^\/?#]+)((?:\/[^?#]*?)?)\/playlist\/([^\/?#]+)\/([^\/?#]+)(?:\/[^?#]*)?(?:[?#].*)?$/i);
+            if (x) return { server: (x[1] + x[2]).replace(/\/+$/, ''), username: dec(x[3]), password: dec(x[4]), kind: 'xui' };
+            var q = url.split('#')[0].split('?');
             if (q.length < 2) return null;
             var params = {};
-            q[1].split('&').forEach(function (part) {
+            q.slice(1).join('?').split('&').forEach(function (part) {
                 var i = part.indexOf('=');
                 if (i < 0) return;
                 var k = part.substr(0, i).toLowerCase();
-                var v = part.substr(i + 1);
-                try { v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { }
-                params[k] = v;
+                // '+' ostaje '+' (lozinke ga cesto sadrze, Android isto); dekodira se samo %xx.
+                params[k] = dec(part.substr(i + 1));
             });
             if (!params.username || !params.password) return null;
-            var base = q[0].replace(/\/(get|player_api|xmltv)\.php$/i, '').replace(/\/+$/, '');
-            var m = base.match(/^(https?:\/\/[^\/]+)/i);
-            if (!m) return null;
-            return { server: base, username: params.username, password: params.password };
+            var base = q[0].replace(/\/(get|player_api|xmltv|panel_api)\.php$/i, '').replace(/\/+$/, '');
+            if (!/^https?:\/\/[^\/]+/i.test(base)) return null;
+            return { server: base, username: params.username, password: params.password, kind: 'xtream' };
         },
         set: function (acc) {
             Xtream.server = acc.server;

@@ -42,7 +42,8 @@
 
         reset: function () {
             Lib.live = emptyKind(); Lib.vod = emptyKind(); Lib.series = emptyKind();
-            Lib.userInfo = null; Lib.serverInfo = null;
+            Lib.userInfo = null; Lib.serverInfo = null; Lib.epgUrls = [];
+            if (App.XmlEpg) App.XmlEpg.reset();
         },
 
         /* ---------------- ucitavanje ---------------- */
@@ -165,7 +166,7 @@
                 return { cats: K.cats.map(function (c) { return { id: c.id, name: c.name }; }), items: K.items };
             };
             App.Cache.put({
-                key: Lib.key, url: Lib.url, type: Lib.type, savedAt: U.now(),
+                key: Lib.key, url: Lib.url, type: Lib.type, savedAt: U.now(), epgUrls: Lib.epgUrls,
                 userInfo: Lib.userInfo, serverInfo: Lib.serverInfo,
                 live: strip(Lib.live), vod: strip(Lib.vod), series: strip(Lib.series)
             });
@@ -180,6 +181,7 @@
                 Lib.url = url; Lib.key = key; Lib.type = d.type;
                 Lib.userInfo = d.userInfo || null; Lib.serverInfo = d.serverInfo || null;
                 Lib.cacheTime = d.savedAt;
+                Lib.epgUrls = d.epgUrls || [];
                 if (Lib.type === 'xtream') { var acc = App.Xtream.parse(url); if (acc) App.Xtream.set(acc); }
                 ['live', 'vod', 'series'].forEach(function (kind) { Lib.indexPlain(kind, d[kind].cats.map(function (c) { return { category_id: c.id, category_name: c.name }; }), d[kind].items || []); });
                 return Lib.live.items.length + Lib.vod.items.length + Lib.series.items.length > 0;
@@ -248,6 +250,7 @@
         /* ---------------- M3U ---------------- */
         parseM3u: function (text) {
             var lines = text.split(/\r?\n/);
+            Lib.epgUrls = Lib.epgUrls || [];
             var live = [], vod = [], seriesEps = [];
             var cats = { live: {}, vod: {}, series: {} };
             var catList = { live: [], vod: [], series: [] };
@@ -259,6 +262,14 @@
                     cur = parseExtinf(line);
                     continue;
                 }
+                if (line.indexOf('#EXTM3U') === 0 || line.indexOf('\ufeff#EXTM3U') === 0) {
+                    // EPG adrese: url-tvg="a.xml.gz,b.xml" / x-tvg-url / tvg-url.
+                    var hre = /\b(?:url-tvg|x-tvg-url|tvg-url)="([^"]*)"/gi, hm;
+                    while ((hm = hre.exec(line)) !== null) {
+                        hm[1].split(',').forEach(function (u) { u = u.replace(/^\s+|\s+$/g, ''); if (u && Lib.epgUrls.indexOf(u) < 0) Lib.epgUrls.push(u); });
+                    }
+                    continue;
+                }
                 if (line.charAt(0) === '#') {
                     if (cur && line.indexOf('#EXTGRP:') === 0 && !cur.group) cur.group = line.substr(8).trim();
                     continue;
@@ -266,9 +277,7 @@
                 if (!cur) continue;
                 if (!/^(https?|rtmp|rtsp|udp):\/\//i.test(line)) { cur = null; continue; }
                 var url = line;
-                var kind = 'live';
-                if (/\/movie\//i.test(url) || /\.(mp4|mkv|avi|mov|wmv|m4v)(\?|$)/i.test(url)) kind = 'vod';
-                if (/\/series\//i.test(url)) kind = 'series';
+                var kind = m3uKind(cur, url);
                 var group = cur.group || t('uncategorized');
                 if (!cats[kind][group]) {
                     cats[kind][group] = true;
@@ -539,7 +548,7 @@
 
     /** #EXTINF:-1 tvg-id="x" tvg-logo="y" group-title="z",Ime kanala */
     function parseExtinf(line) {
-        var res = { name: '', group: '', logo: '', tvgId: '', tvgName: '', catchup: '' };
+        var res = { name: '', group: '', logo: '', tvgId: '', tvgName: '', catchup: '', type: '' };
         var re = /([a-zA-Z0-9_-]+)="([^"]*)"/g, m;
         while ((m = re.exec(line)) !== null) {
             var k = m[1].toLowerCase();
@@ -548,27 +557,61 @@
             else if (k === 'tvg-id') res.tvgId = m[2].trim();
             else if (k === 'tvg-name') res.tvgName = m[2].trim();
             else if (k === 'catchup' || k === 'catchup-source' || k === 'tvg-rec') res.catchup = m[2];
+            else if (k === 'tvg-type' || k === 'type') res.type = m[2].trim().toLowerCase();
         }
-        // Ime je iza zadnjeg zareza koji nije unutar navodnika.
+        // Ime je iza PRVOG zareza izvan navodnika (atributi su uvijek ispred imena): "Kanal 1, HD"
+        // ostaje cijelo ime, a zarez unutar group-title="A, B" se preskace.
         var inQ = false, cut = -1;
         for (var i = 0; i < line.length; i++) {
             var c = line.charAt(i);
             if (c === '"') inQ = !inQ;
-            else if (c === ',' && !inQ) cut = i;
+            else if (c === ',' && !inQ) { cut = i; break; }
         }
         if (cut >= 0) res.name = line.substr(cut + 1).trim();
         if (!res.name) res.name = res.tvgName;
         return res;
     }
 
+    /**
+     * Vrsta M3U stavke: 1) tvg-type (XUI ONE / vecina generatora: live | movie | series),
+     * 2) Xtream putanja u URL-u (/movie/, /series/), 3) "S01E02" u imenu + video datoteka = epizoda,
+     * 4) video datoteka (.mp4, .mkv…) = film, inace live.
+     */
+    var VIDEO_FILE = /\.(mp4|mkv|avi|mov|wmv|m4v|webm|flv|mpg|mpeg)(\?|#|$)/i;
+    var EP_RE = /^(.*?)[\s._-]*[Ss](\d{1,2})[\s._-]*[Ee](\d{1,4})(.*)$/;
+    var EP_RE_SEASON = /^(.*?)[\s._-]+(?:season|sezona|staffel|saison|s)\s*(\d{1,2})[\s._,-]*(?:episode|epizoda|folge|ep|e)\.?\s*(\d{1,4})(.*)$/i;
+    var EP_RE_X = /^(.*?)[\s._-]+(\d{1,2})x(\d{1,3})(.*)$/;
+    var EP_RE_WORD = /^(.*?)[\s._-]+(?:ep(?:isode)?|epizoda)\.?\s*(\d{1,4})(.*)$/i;
+    function m3uKind(cur, url) {
+        var ty = cur.type || '';
+        if (/^(live|channel|tv|stream|radio)/.test(ty)) return 'live';
+        if (/^(movie|movies|vod|film|video)/.test(ty)) return 'vod';
+        if (/^(series|serie|show|tvshow|episode)/.test(ty)) return 'series';
+        if (/\/series\//i.test(url)) return 'series';
+        if (/\/movie\//i.test(url)) return 'vod';
+        if (VIDEO_FILE.test(url)) return EP_RE.test(cur.name || '') || EP_RE_SEASON.test(cur.name || '') ? 'series' : 'vod';
+        return 'live';
+    }
+    Lib.m3uKind = m3uKind;
+
+    /** Epizoda iz imena: {series, season, ep, title} ("Ime S01E02 Naslov", "Ime 1x02", "Ime Episode 3"). */
+    function parseEpisodeName(name) {
+        var m = name.match(EP_RE) || name.match(EP_RE_SEASON) || name.match(EP_RE_X);
+        if (m) return { series: m[1].replace(/[\s:._-]+$/, '').trim(), season: parseInt(m[2], 10), ep: parseInt(m[3], 10), title: m[4].replace(/^[\s:._-]+/, '').trim() };
+        m = name.match(EP_RE_WORD);
+        if (m) return { series: m[1].replace(/[\s:._-]+$/, '').trim(), season: 1, ep: parseInt(m[2], 10), title: m[3].replace(/^[\s:._-]+/, '').trim() };
+        return null;
+    }
+    Lib.parseEpisodeName = parseEpisodeName;
+
     /** M3U serije: "Ime S01 E02" / "Ime S01E02" / "Ime 1x02" -> serija > sezona > epizoda. */
     function groupSeries(eps) {
         var map = {}, list = [], seenS = {};
         eps.forEach(function (e, i) {
-            var m = e.name.match(/^(.*?)[\s._-]*[Ss](\d{1,2})[\s._-]*[Ee](\d{1,3})(.*)$/) || e.name.match(/^(.*?)[\s._-]+(\d{1,2})x(\d{1,3})(.*)$/);
-            var sName = m ? m[1].trim() : e.name;
-            var season = m ? parseInt(m[2], 10) : 1;
-            var epNum = m ? parseInt(m[3], 10) : 1;
+            var p = parseEpisodeName(e.name);
+            var sName = p && p.series ? p.series : e.name;
+            var season = p ? p.season : 1;
+            var epNum = p ? p.ep : 1;
             var key = e.cat + '|' + sName.toLowerCase();
             var s = map[key];
             if (!s) {
@@ -581,7 +624,7 @@
             }
             if (!s.m3uSeasons[season]) s.m3uSeasons[season] = [];
             s.m3uSeasons[season].push({
-                id: stableId('e', e.url, seenS), num: epNum, title: (m && m[4] && m[4].replace(/^[\s:._-]+/, '')) || (t('episode') + ' ' + epNum),
+                id: stableId('e', e.url, seenS), num: epNum, title: (p && p.title) || (t('episode') + ' ' + epNum),
                 url: e.url, ext: (e.url.match(/\.([a-z0-9]{2,4})(\?|$)/i) || [])[1] || 'mp4', icon: e.icon
             });
             if (!s.icon && e.icon) s.icon = e.icon;
