@@ -78,9 +78,10 @@ var U = App.U = {
     /** Base64 (UTF-8) iz Xtream EPG-a; ako nije base64 vraca ulaz. */
     b64: function (s) {
         if (!s) return '';
-        if (!/^[A-Za-z0-9+\/=\s]+$/.test(s) || s.length % 4 !== 0) return s;
-        try { return decodeURIComponent(escape(window.atob(s))); } catch (e) {
-            try { return window.atob(s); } catch (e2) { return s; }
+        var c = String(s).replace(/\s+/g, '');
+        if (!/^[A-Za-z0-9+\/=]+$/.test(c) || c.length % 4 !== 0) return s;
+        try { return decodeURIComponent(escape(window.atob(c))); } catch (e) {
+            try { return window.atob(c); } catch (e2) { return s; }
         }
     },
     hash: function (s) {
@@ -227,7 +228,13 @@ var U = App.U = {
             try {
                 for (var i = window.localStorage.length - 1; i >= 0; i--) {
                     var k = window.localStorage.key(i);
-                    if (k && k.indexOf(':resume') > 0) { window.localStorage.removeItem(k); delete U.store.cache[k]; }
+                    if (!k || k.indexOf(':resume') <= 0) continue;
+                    var all = U.parseJSON(window.localStorage.getItem(k)) || {};
+                    var keys = Object.keys(all).sort(function (a, b) { return (all[a].t || 0) - (all[b].t || 0); });
+                    for (var j = 0; j < Math.ceil(keys.length / 2); j++) delete all[keys[j]];
+                    if (Object.keys(all).length) window.localStorage.setItem(k, JSON.stringify(all));
+                    else window.localStorage.removeItem(k);
+                    delete U.store.cache[k];
                 }
             } catch (e) { }
         }

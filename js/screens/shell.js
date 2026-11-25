@@ -267,16 +267,24 @@
             Shell.markRail();
             Shell.loadCats('live');
             Shell.showCats(true);
+            var L = App.Lib, catId = null;
             var ci = Shell.indexOfCat(ch.cat);
             var c = Shell.cats[ci];
-            // Zakljucana ili skrivena kategorija: otvori kroz Favorites (ako je tamo) ili All.
-            if (ci < 0 || (App.Lib.isLocked('live', c) && !c.unlocked)) {
-                ci = App.Lib.isFav('live', ch.id) ? Shell.indexOfCat(App.Lib.FAV) : Shell.indexOfCat(App.Lib.ALL);
+            if (ci >= 0 && !(L.isLocked('live', c) && !c.unlocked)) catId = ch.cat;
+            else {
+                // Zakljucana ili skrivena kategorija: prva posebna kategorija koja STVARNO sadrzi kanal
+                // ("All" ne sadrzi skrivene ni zakljucane pa bi se pustio krivi, prvi kanal).
+                [L.FAV, L.RECENT, L.ALL].forEach(function (id) {
+                    if (!catId && L.items('live', id).indexOf(ch) >= 0) catId = id;
+                });
+                // Skrivena kategorija (npr. iz pretrage): otvori je izravno, bez oznake u stupcu.
+                if (!catId) catId = ch.cat;
+                ci = Shell.indexOfCat(catId);
             }
             Shell.openCat = ci;
-            Shell.layer.zones.cats.reset(ci);
+            Shell.layer.zones.cats.reset(Math.max(0, ci));
             Shell.showPanel('live');
-            App.Live.openCategory(Shell.cats[ci].id, true, ch.id, full);
+            App.Live.openCategory(catId, true, ch.id, full);
         }
     };
 })();

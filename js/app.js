@@ -217,7 +217,7 @@
         if (A.Live && A.Live.clearEpg) A.Live.clearEpg();
         U.store.remove('lbbe_info_cache');
         if (all) {
-            var keep = { lbbe_settings: 1, lbbe_device_key: 1, lbbe_device_id: 1, lbbe_device_token: 1, lbbe_languages: 1 };
+            var keep = { lbbe_settings: 1, lbbe_device_key: 1, lbbe_device_id: 1, lbbe_device_token: 1, lbbe_hw_id: 1, lbbe_languages: 1 };
             try {
                 for (var i = window.localStorage.length - 1; i >= 0; i--) {
                     var k = window.localStorage.key(i);

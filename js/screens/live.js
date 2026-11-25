@@ -20,6 +20,8 @@
 
         init: function (l) {
             layer = l;
+            // Nova playlista: EPG prethodne (isti stream_id na drugom serveru je drugi kanal).
+            epgCache = {};
             var el = U.byId('panel-live');
             el.innerHTML =
                 '<div class="ch-col"><div class="ch-head"><div class="t-section" id="ch-title"></div><div class="t-caption" id="ch-count"></div></div>' +
@@ -41,6 +43,9 @@
                 nb: { left: 'cats' }
             });
             layer.zones.channels = list;
+            // Shell.start (svako ucitavanje playliste) zove init ponovno: listeneri samo jednom.
+            if (Live.bound) return;
+            Live.bound = true;
             App.Player.on(function (ev) { if (ev === 'state' || ev === 'media' || ev === 'reconnect') Live.paintStatus(); });
             // XMLTV (M3U) je stigao: osvjezi EPG fokusiranog kanala i OSD.
             if (App.XmlEpg) App.XmlEpg.onChange(function () {
@@ -150,7 +155,7 @@
             return '<span class="num">' + U.esc(ch.num || i + 1) + '</span>' +
                 '<span class="logo">' + (U.safeUrl(ch.icon) ? '<img src="' + U.safeUrl(ch.icon) + '" alt="" onerror="this.style.display=\'none\'" />' : App.icon('phTv', 'ph')) + '</span>' +
                 '<span class="nm">' + U.esc(ch.name) + '</span>' +
-                (ch.archive ? App.icon('catchup', 'catch') : '') +
+                (ch.archive && App.Lib.type === 'xtream' ? App.icon('catchup', 'catch') : '') +
                 (App.Lib.isFav('live', ch.id) ? App.icon('star', 'star') : '');
         },
 
@@ -179,7 +184,7 @@
             if (!ch) return;
             var parts = [];
             parts.push(ch.id === Live.playingId ? t('ok_full') : t('press_ok_to_play'));
-            if (ch.archive && Live.mode === 'channels') parts.push(t('catchup_hint'));
+            if (ch.archive && Live.mode === 'channels' && App.Lib.type === 'xtream') parts.push(t('catchup_hint'));
             U.byId('pv-help').textContent = parts.join('   ·   ');
         },
         loadEpg: U.debounce(function (ch) {
@@ -216,13 +221,15 @@
                 var de = U.byId('pv-desc'); if (de) de.textContent = '';
                 return;
             }
-            var html = '';
-            items.forEach(function (p, i) {
+            var html = '', nextShown = false;
+            items.forEach(function (p) {
                 var isNow = p.start <= now && p.end > now;
+                var isNext = !isNow && !nextShown && p.start > now;
+                if (isNext) nextShown = true;
                 var pct = isNow ? Math.round(100 * (now - p.start) / (p.end - p.start)) : 0;
                 html += '<div class="epg-row' + (isNow ? ' now' : '') + '"><span class="tm">' + U.esc(U.fmtClock(p.start) + ' – ' + U.fmtClock(p.end)) +
                     '</span><span class="ti">' + U.esc(p.title) + (isNow ? '<div class="bar"><div style="width:' + pct + '%"></div></div>' : '') +
-                    '</span><span class="tag">' + (isNow ? U.esc(t('now')) : (i === 1 || (i === 0 && !isNow) ? U.esc(t('next')) : '')) + '</span></div>';
+                    '</span><span class="tag">' + (isNow ? U.esc(t('now')) : (isNext ? U.esc(t('next')) : '')) + '</span></div>';
             });
             el.innerHTML = html;
             U.byId('pv-desc').textContent = items[0] && items[0].start <= now ? items[0].desc : '';

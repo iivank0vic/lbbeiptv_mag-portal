@@ -335,6 +335,7 @@
         play: function (media) {
             P.saveResume();
             P.media = media;
+            P.openedAt = U.now();
             P.attempt = 0;
             clearTimeout(P.stallTimer);
             P.lastTime = media.start || 0;
@@ -347,8 +348,13 @@
         reopen: function () {
             if (!P.media) return;
             P.attempt = 0;
+            clearTimeout(P.retryTimer);
+            clearTimeout(P.stallTimer);
             P.setState('loading');
-            P.engine.open(P.media.url, { start: P.media.kind === 'vod' || P.media.kind === 'episode' ? P.engine.time() : 0 });
+            // Nakon greske engine.time() je 0: nastavi od zadnje poznate pozicije.
+            var vod = P.media.kind === 'vod' || P.media.kind === 'episode';
+            P.engine.open(P.media.url, { start: vod ? (P.lastTime || P.engine.time()) : 0 });
+            if (P.full) P.engine.setRatio(P.ratioMode());
         },
         stop: function () {
             P.saveResume();
@@ -447,6 +453,8 @@
             var t0 = P.engine.time();
             if (ended) { App.Lib.setResume(m.resumeKey.kind, m.resumeKey.id, 0, d); return; }
             if (!d || !t0) return;
+            // Engine jos nije skocio na poziciju nastavka: ne prepisuj je s ~0 s.
+            if (m.start > 30 && t0 + 10 < m.start && U.now() - (P.openedAt || 0) < 20000) return;
             App.Lib.setResume(m.resumeKey.kind, m.resumeKey.id, t0, d);
         },
 

@@ -85,6 +85,8 @@ U pregledniku se koristi HTML5 player i nasumični ID uređaja (spremljen u loca
 
 **Samsung:** Tizen Studio → Build Signed Package (certifikat autora + distributora), ili
 `tizen package -t wgt -s <profil> -- .` pa `tizen install -n IPTVLBBEPLAYER.wgt -t <tv>`.
+`tizen_web_project.yaml` (VS Code / `tizen build-web`) navodi tocno datoteke koje idu u paket: nova datoteka
+u `js/`, `css/`, `fonts/` ili `images/` mora se dodati i tamo. Certifikati (`.certs/`) i `.git` nikad ne idu u paket.
 
 ## Kompatibilnost
 

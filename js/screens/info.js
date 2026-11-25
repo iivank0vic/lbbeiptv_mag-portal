@@ -91,18 +91,21 @@
         parseSeries: function (d) {
             var eps = d.episodes || {};
             var keys = Object.keys(eps).sort(function (a, b) { return parseInt(a, 10) - parseInt(b, 10); });
+            var isArr = Object.prototype.toString.call(eps) === '[object Array]';
             I.seasons = keys.map(function (k) {
+                var first = U.toArray(eps[k])[0] || {};
+                var sNum = isArr ? (parseInt(first.season, 10) || (parseInt(k, 10) + 1)) : (parseInt(k, 10) || parseInt(first.season, 10) || 0);
                 var list = U.toArray(eps[k]).map(function (e, i) {
                     var info = e.info || {};
                     return {
                         id: U.str(e.id), num: parseInt(e.episode_num, 10) || (i + 1), title: U.str(e.title) || (t('episode') + ' ' + (i + 1)),
                         ext: e.container_extension || 'mp4', plot: info.plot || '', duration: info.duration || '',
-                        durSec: parseInt(info.duration_secs, 10) || 0, season: parseInt(k, 10) || 1, url: '',
+                        durSec: parseInt(info.duration_secs, 10) || 0, season: sNum || 1, url: '',
                         image: U.safeUrl(info.movie_image || info.cover_big || '') || ''
                     };
                 });
                 list.sort(function (a, b) { return a.num - b.num; });
-                return { num: parseInt(k, 10) || 0, episodes: list };
+                return { num: sNum, episodes: list };
             }).filter(function (s) { return s.episodes.length; });
             I.pickInitialSeason();
         },

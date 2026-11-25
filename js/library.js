@@ -365,7 +365,11 @@
         countIn: function (kind, catId) {
             if (catId === FAV) return Lib.idsToItems(kind, Lib.favIds(kind)).length;
             if (catId === RECENT) return Lib.idsToItems(kind, Lib.recentIds(kind)).length;
-            if (catId === ALL) return Lib[kind].items.length;
+            if (catId === ALL) {
+                var hidden = Lib.hiddenSet(kind), n = 0;
+                Lib[kind].cats.forEach(function (c) { if (!hidden[c.id] && !Lib.isLocked(kind, c)) n += c.items.length; });
+                return n;
+            }
             var c = Lib[kind].byCat[catId];
             return c ? c.items.length : 0;
         },

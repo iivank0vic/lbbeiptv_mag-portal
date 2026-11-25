@@ -277,7 +277,7 @@
                 return U.http({ url: 'https://speed.cloudflare.com/__down?bytes=' + size + '&r=' + s, timeout: 60000 }).then(function (txt) {
                     clearInterval(timer);
                     var sec = (U.now() - s) / 1000;
-                    var bytes = (txt && txt.length) || size;
+                    var bytes = size;
                     setText('n-down', (bytes * 8 / sec / 1000000).toFixed(1));
                 }, function () { clearInterval(timer); setText('n-down', 'Error'); });
             }).then(function () {
@@ -295,10 +295,7 @@
     };
 
     function currentLang() {
-        var c = App.Settings.get('language');
-        if (c) return c;
-        var langs = App.I18N.languages();
-        return langs.length ? langs[0].code : 'en';
+        return App.Settings.get('language') || App.I18N.code || 'en';
     }
     function kv(k, v, id) {
         return '<div class="kv"><span class="k">' + U.esc(k) + '</span><span class="v" id="' + id + '">' + U.esc(v) + '</span></div>';

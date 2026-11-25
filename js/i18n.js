@@ -94,7 +94,9 @@
             languages = U.toArray(list).filter(function (l) { return l && l.code; });
         },
         languages: function () { return languages; },
+        code: '',
         setLang: function (code) {
+            I18N.code = code;
             current = {};
             for (var i = 0; i < languages.length; i++) {
                 if (languages[i].code === code) {

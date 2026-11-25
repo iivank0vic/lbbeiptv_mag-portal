@@ -135,7 +135,7 @@
     // Kotacic: gore/dolje u trenutnoj zoni.
     document.addEventListener('wheel', function (e) {
         var z = Nav.zone();
-        if (!z || !z.key) return;
+        if (Nav.locked || !z || !z.key) return;
         z.key(e.deltaY > 0 ? 'down' : 'up');
     });
 })();

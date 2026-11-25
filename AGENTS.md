@@ -38,6 +38,8 @@ TV web klijent LBBE IPTV playera. **Izvor istine za izgled i ponašanje je `APP.
 ## Zamke
 
 - LG ID uređaja = LGUDID pretvoren u MAC oblik (12 znakova). **Ne mijenjati formulu** — na njoj su registracije.
+- Zadnji ID pročitan sa sustava TV-a sprema se u `lbbe_hw_id` i koristi kad servis TV-a ne odgovori na vrijeme
+  (spor start) — nikad nasumični ili drugi ID na TV-u koji je već imao pravi. "Clear all data" ga čuva.
 - Samsung MAC: Ethernet → Wi-Fi → `webapis.network.getMac()` → nasumični ID spremljen na TV-u
   (stara verzija je svima davala isti MAC `52:54:00:12:34:52`).
 - Catch-up URL: `/streaming/timeshift.php?username=&password=&stream=&start=YYYY-MM-DD:HH-MM&duration=` —

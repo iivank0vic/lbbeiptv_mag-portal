@@ -191,7 +191,12 @@
             if (this.o.onFocus) this.o.onFocus(this.index);
             return true;
         },
-        setIndex: function (i) { this.index = i; this.paintFocus(); },
+        setIndex: function (i) {
+            if (i === this.index) return;
+            this.index = U.clamp(i, 0, Math.max(0, this.count() - 1));
+            this.paintFocus();
+            if (this.o.onFocus) this.o.onFocus(this.index);
+        },
         key: function (a) {
             var cols = this.o.cols, n = this.count(), i = this.index;
             if (a === 'left') return (i % cols) > 0 ? this.go(i - 1) : false;
