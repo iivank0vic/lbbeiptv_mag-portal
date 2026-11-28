@@ -415,7 +415,7 @@
         name: 'mag',
         label: 'MAG',
         panelUrl: PANEL,
-        version: '3.1.0',
+        version: '3.1.2',
         engines: onTv ? [{ id: 'mag', label: 'MAG player' }] : [{ id: 'html5', label: 'HTML5' }],
         onTv: onTv,
         scale: 1,
