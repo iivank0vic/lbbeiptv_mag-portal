@@ -129,7 +129,7 @@
     A.pickPlaylist = function (fromGate) {
         var urls = A.info.urls;
         var cur = A.Settings.get('playlist_index');
-        var opts = urls.map(function (u, i) { return { label: A.playlistName(i), sub: A.playlistHost(u), value: i }; });
+        var opts = urls.map(function (u, i) { return { label: A.playlistName(i), value: i }; });
         A.Loader.hide();
         A.Dialog.choose(t('select_playlist'), opts, cur).then(function (v) {
             if (v === null) {
