@@ -35,6 +35,7 @@
             list = new W.VList({
                 el: U.byId('s-list'), name: 'results', rowH: 92, rowCls: 'ch-row', pad: 1,
                 count: function () { return S.results.length; },
+                empty: function () { return S.query && S.query.trim() ? t('no_results', 'No results') : ''; },
                 inner: function (i) {
                     var it = S.results[i];
                     return '<span class="logo">' + (U.safeUrl(it.icon) ? '<img src="' + U.safeUrl(it.icon) + '" alt="" onerror="this.style.display=\'none\'" />' : '') + '</span>' +

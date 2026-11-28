@@ -83,7 +83,7 @@
                 rows.push(z);
             });
             if (!defs.length) {
-                el.querySelector('.home-inner').insertAdjacentHTML('beforeend', '<div class="row-empty"></div>');
+                el.querySelector('.home-inner').insertAdjacentHTML('beforeend', '<div class="row-empty">' + U.esc(t('no_information')) + '</div>');
             }
         },
 

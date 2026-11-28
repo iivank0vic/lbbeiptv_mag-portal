@@ -278,10 +278,10 @@
                 if (!/^(https?|rtmp|rtsp|udp):\/\//i.test(line)) { cur = null; continue; }
                 var url = line;
                 var kind = m3uKind(cur, url);
-                var group = cur.group || t('uncategorized');
+                var group = cur.group || NONE; // ime 'Uncategorized' se prevodi pri prikazu
                 if (!cats[kind][group]) {
                     cats[kind][group] = true;
-                    catList[kind].push({ category_id: group, category_name: group });
+                    catList[kind].push({ category_id: group, category_name: group === NONE ? t('uncategorized') : group });
                 }
                 num++;
                 var base = {
@@ -332,7 +332,10 @@
                 { id: RECENT, name: t('recently_viewed'), special: true },
                 { id: ALL, name: t('all'), special: true }
             ];
-            Lib[kind].cats.forEach(function (c) { if (!hidden[c.id]) out.push(c); });
+            Lib[kind].cats.forEach(function (c) {
+                if (c.id === NONE) c.name = t('uncategorized'); // prati promjenu jezika
+                if (!hidden[c.id]) out.push(c);
+            });
             return out;
         },
         allCategories: function (kind) { return Lib[kind].cats; },
@@ -340,6 +343,7 @@
             if (catId === FAV) return t('favorites');
             if (catId === RECENT) return t('recently_viewed');
             if (catId === ALL) return t('all');
+            if (catId === NONE) return t('uncategorized');
             var c = Lib[kind].byCat[catId];
             return c ? c.name : '';
         },

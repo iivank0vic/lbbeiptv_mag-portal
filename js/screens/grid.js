@@ -18,6 +18,7 @@
                 el: U.byId('grid'), name: 'grid', cols: 6, cellCls: 'grid-card',
                 rowH: function (w) { return Math.round((w - 32) * 1.5 + 32 + 44); },
                 count: function () { return Grid.items.length; },
+                empty: function () { return Grid.emptyText(); },
                 inner: function (i) { return Grid.card(Grid.items[i]); },
                 onOk: function (i) { App.Info.open(Grid.kind, Grid.items[i]); },
                 onKey: function (a, i) {
@@ -51,6 +52,12 @@
             var idx = cur ? Grid.items.indexOf(cur) : 0;
             grid.reset(Math.max(0, idx));
             if (Nav.current() === 'grid') grid.focus();
+        },
+        emptyText: function () {
+            var L = App.Lib;
+            if (Grid.catId === L.RECENT) return t('no_recent', 'Nothing watched yet. Titles you watch will appear here.');
+            if (Grid.catId === L.FAV) return t('no_favorites', 'No favorites yet. Press the yellow button on a title to add it.');
+            return Grid.kind === 'vod' ? t('no_movies') : t('no_series');
         },
         renderTools: function () {
             var key = App.Settings.get(Grid.kind === 'vod' ? 'vod_sort' : 'series_sort');

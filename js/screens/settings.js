@@ -112,7 +112,7 @@
             } else if (id === 'hide-live' || id === 'hide-vod' || id === 'hide-series') {
                 var kind = id.substr(5);
                 var hidden = L.hiddenSet(kind);
-                var copts = L.allCategories(kind).map(function (c) { return { label: c.name, value: c.id, sub: String(c.items.length), on: !!hidden[c.id] }; });
+                var copts = L.allCategories(kind).map(function (c) { return { label: c.id === L.NONE || c.id === '__none' ? t('uncategorized') : c.name, value: c.id, sub: String(c.items.length), on: !!hidden[c.id] }; });
                 if (!copts.length) { App.toast(t('no_information')); return; }
                 var go = function () {
                     D.multi(t(id === 'hide-live' ? 'hide_live_category' : (id === 'hide-vod' ? 'hide_vod_category' : 'hide_series_category')),

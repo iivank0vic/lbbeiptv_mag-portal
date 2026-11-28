@@ -7,6 +7,14 @@
     var W = window.W = App.W = {};
 
     function hasCls(el, c) { return el && el.classList && el.classList.contains(c); }
+    /** Prazna lista/grid: poruka umjesto praznog ekrana (Samsung QA). opts.empty = tekst ili funkcija. */
+    function paintEmpty(z) {
+        var e = z.o.empty; e = typeof e === 'function' ? e() : e;
+        z.first = -1; z.last = -1;
+        z.inner.style.height = '';
+        z.inner.style.webkitTransform = ''; z.inner.style.transform = '';
+        z.inner.innerHTML = e ? '<div class="list-empty">' + U.esc(e) + '</div>' : '';
+    }
 
     /* ======================= VList ======================= */
     /**
@@ -55,6 +63,7 @@
         },
         render: function (force) {
             var h = this.o.rowH, n = this.count();
+            if (!n) { paintEmpty(this); return; }
             var first = Math.max(0, Math.floor(this.scroll / h) - 2);
             var last = Math.min(n - 1, Math.ceil((this.scroll + this.viewH) / h) + 2);
             this.inner.style.height = (n * h) + 'px';
@@ -160,6 +169,7 @@
         },
         render: function (force) {
             var cols = this.o.cols, n = this.count();
+            if (!n) { paintEmpty(this); return; }
             var firstRow = Math.max(0, Math.floor(this.scroll / this.rowH) - 1);
             var lastRow = Math.ceil((this.scroll + this.viewH) / this.rowH) + 1;
             var first = firstRow * cols, last = Math.min(n - 1, (lastRow + 1) * cols - 1);

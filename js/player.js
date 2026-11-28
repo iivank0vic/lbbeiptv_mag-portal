@@ -296,9 +296,20 @@
             P.create(id);
             document.addEventListener('visibilitychange', function () {
                 if (!P.engine) return;
-                if (document.hidden) { P.saveResume(); P.engine.suspend(); }
+                if (document.hidden) { P.saveResume(); P.engine.suspend(); return; }
+                // Povratak iz multitaskinga / Multi View: live nakon restore() zna ostati crn,
+                // pa ga ponovno otvori; film/epizoda nastavlja od zadnje pozicije.
+                if (P.media && P.state !== 'paused' && P.state !== 'idle') P.reopen();
                 else P.engine.restore();
             });
+            // Mreza se vratila: nastavi reprodukciju umjesto da ostane poruka o gresci.
+            window.addEventListener('online', function () {
+                if (P.media && (P.state === 'error' || P.state === 'reconnecting' || P.state === 'loading')) P.reopen();
+            });
+            // Neki TV-i ne javljaju 'online': provjeri svakih 5 s dok je stream u gresci.
+            setInterval(function () {
+                if (P.media && P.state === 'error' && P.offlineErr && navigator.onLine !== false) { P.offlineErr = false; P.reopen(); }
+            }, 5000);
             setInterval(P.saveResume, 10000);
         },
         create: function (id) {
@@ -378,6 +389,13 @@
             var m = P.media;
             clearTimeout(P.stallTimer);
             if (!m) { P.setState('error'); return; }
+            // Bez mreze ne trosi pokusaje: cekaj da se veza vrati ('online' / provjera svakih 5 s).
+            if (navigator.onLine === false) {
+                P.offlineErr = true;
+                P.setState('reconnecting');
+                P.emit('reconnect');
+                return;
+            }
             if (P.attempt < P.MAX_RETRY) {
                 P.attempt++;
                 P.setState('reconnecting');
@@ -392,6 +410,7 @@
                 }, 1000 * Math.pow(2, P.attempt - 1));
                 return;
             }
+            P.offlineErr = true; // mozda je mreza pala bez 'offline' dogadaja - provjera ce probati opet
             P.setState('error');
         },
         toggle: function () {

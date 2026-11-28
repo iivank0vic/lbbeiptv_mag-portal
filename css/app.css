@@ -193,6 +193,7 @@ body.fullscreen-video #shell, body.fullscreen-video #info { visibility: hidden; 
 .row-card.focus .pic { -webkit-transform: scale(1.06); transform: scale(1.06); -webkit-box-shadow: 0 0 0 6px #FFFFFF, 0 16px 40px rgba(0,0,0,.6); box-shadow: 0 0 0 6px #FFFFFF, 0 16px 40px rgba(0,0,0,.6); }
 .row-card .cap { font-size: 22px; color: #9AA7B2; margin-top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-card.focus .cap { color: #FFFFFF; }
+.list-empty { padding: 80px 40px; font-size: 30px; color: #9AA7B2; text-align: center; }
 .row-empty { margin: 0 60px; font-size: 26px; color: #9AA7B2; padding: 20px 0; }
 
 /* placeholder slike (Android placeholder_*): gradijent ui_surface_raised -> ui_bg + ikona ui_text_muted */
