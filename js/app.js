@@ -57,8 +57,16 @@
 
     A.useInfo = function (info) {
         A.info = info;
-        info.urls = U.toArray(info.urls).filter(function (u) { return typeof u === 'string' && u.trim() !== ''; })
-            .map(function (u) { return u.trim(); });
+        // Imena playlista (playlist_name) idu paralelno s urls - filtriraj oboje zajedno da ostanu poravnati.
+        var rawUrls = U.toArray(info.urls), rawNames = U.toArray(info.playlist_name), urls = [], names = [];
+        for (var i = 0; i < rawUrls.length; i++) {
+            var u = rawUrls[i];
+            if (typeof u !== 'string' || u.trim() === '') continue;
+            urls.push(u.trim());
+            names.push(typeof rawNames[i] === 'string' ? rawNames[i].trim() : '');
+        }
+        info.urls = urls;
+        info.playlist_name = names;
         if (info.languages) {
             A.I18N.setLanguages(info.languages);
             U.store.set('lbbe_languages', info.languages);
@@ -121,7 +129,7 @@
     A.pickPlaylist = function (fromGate) {
         var urls = A.info.urls;
         var cur = A.Settings.get('playlist_index');
-        var opts = urls.map(function (u, i) { return { label: t('playlist') + ' ' + (i + 1), sub: A.playlistHost(u), value: i }; });
+        var opts = urls.map(function (u, i) { return { label: A.playlistName(i), sub: A.playlistHost(u), value: i }; });
         A.Loader.hide();
         A.Dialog.choose(t('select_playlist'), opts, cur).then(function (v) {
             if (v === null) {
@@ -131,6 +139,12 @@
             if (fromGate) A.Gate.close();
             A.loadPlaylist(v);
         });
+    };
+
+    /** Ime playliste s weba (lbbeiptv.com/mylist); bez imena "Playlist N". */
+    A.playlistName = function (idx) {
+        var n = A.info && A.info.playlist_name && A.info.playlist_name[idx];
+        return n ? n : t('playlist') + ' ' + (idx + 1);
     };
 
     A.playlistHost = function (url) {

@@ -143,7 +143,7 @@
             var urls = (App.info && App.info.urls) || [];
             var cur = App.Settings.get('playlist_index');
             var opts = urls.map(function (u, i) {
-                return { label: t('playlist') + ' ' + (i + 1) + '  ·  ' + App.playlistHost(u), value: i, sub: i === cur ? t('active') : '', on: i === cur };
+                return { label: App.playlistName(i) + '  ·  ' + App.playlistHost(u), value: i, sub: i === cur ? t('active') : '', on: i === cur };
             });
             var qr = App.Api.withMac(App.Api.MYLIST_URL, App.mac);
             App.Dialog.open({
